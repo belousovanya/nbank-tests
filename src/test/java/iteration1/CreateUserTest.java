@@ -48,12 +48,34 @@ public class CreateUserTest {
     }
 
     public static Stream<Arguments> userInvalidData() {
+        String passwordError = "Password must contain at least one digit, one lower case, one upper case, one special character, no spaces, and be at least 8 characters long";
+
         return Stream.of(
                 // username field validation
                 Arguments.of("   ", "Password33$", "USER", "username", "Username cannot be blank"),
                 Arguments.of("ab", "Password33$", "USER", "username", "Username must be between 3 and 15 characters"),
+                Arguments.of("abcdefghijklmnop", "Password33$", "USER", "username", "Username must be between 3 and 15 characters"),
                 Arguments.of("abc$", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
-                Arguments.of("abc%", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots")
+                Arguments.of("abc%", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
+                Arguments.of("abc^", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
+                Arguments.of("abc&", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
+                Arguments.of("abc*", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
+                Arguments.of("abc(", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
+                Arguments.of("abc)", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
+                Arguments.of("abc@", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
+                Arguments.of("abc#", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
+
+                // password field validation
+                Arguments.of("validuser", "", "USER", "password", "Password cannot be blank"),
+                Arguments.of("validuser", "Aa1!abc", "USER", "password", passwordError), // 7 символов
+                Arguments.of("validuser", "Password!", "USER", "password", passwordError), // без цифр
+                Arguments.of("validuser", "PASSWORD33!", "USER", "password", passwordError), // без строчных букв
+                Arguments.of("validuser", "password33!", "USER", "password", passwordError), // без заглавных букв
+                Arguments.of("validuser", "Password33", "USER", "password", passwordError), // без спецсимвола
+                Arguments.of("validuser", "Password 33!", "USER", "password", passwordError), // с пробелом
+
+                // role field validation
+                Arguments.of("validuser", "Password33$", "EDITOR", "role", "Role must be either 'ADMIN' or 'USER'")
         );
 
     }
@@ -79,6 +101,6 @@ public class CreateUserTest {
                 .then()
                 .assertThat()
                 .statusCode(HttpStatus.SC_BAD_REQUEST)
-                .body(errorKey, Matchers.equalTo(errorValue));
+                .body(errorKey, Matchers.hasItem(errorValue));
     }
 }
