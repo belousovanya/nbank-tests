@@ -1,50 +1,41 @@
 package iteration1;
 
-import io.restassured.RestAssured;
-import io.restassured.filter.log.RequestLoggingFilter;
-import io.restassured.filter.log.ResponseLoggingFilter;
-import io.restassured.http.ContentType;
+import io.restassured.builder.ResponseSpecBuilder;
+import io.restassured.specification.ResponseSpecification;
+import iteration1.generators.RandomData;
+import iteration1.models.CreateUserRequest;
+import iteration1.models.CreateUserResponse;
+import iteration1.models.UserRole;
+import iteration1.requests.AdminCreateUserRequester;
+import iteration1.specs.RequestSpecs;
+import iteration1.specs.ResponseSpecs;
 import org.apache.http.HttpStatus;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.List;
 import java.util.stream.Stream;
 
-import static io.restassured.RestAssured.given;
-
-public class CreateUserTest {
-    @BeforeAll
-    public static void setupRestAssured() {
-        RestAssured.filters(
-                List.of(new RequestLoggingFilter(),
-                        new ResponseLoggingFilter()));
-    }
-
+public class CreateUserTest extends BaseTest {
     @Test
     public void adminCanCreateUserWithCorrectData() {
-        given()
-                .contentType(ContentType.JSON)
-                .accept(ContentType.JSON)
-                .header("Authorization", "Basic YWRtaW46YWRtaW4=")
-                .body("""
-                        {
-                          "username": "kate200011",
-                          "password": "Kate2000#!",
-                          "role": "USER"
-                        }
-                        """)
-                .post("http://localhost:4111/api/v1/admin/users")
-                .then()
-                .assertThat()
-                .statusCode(HttpStatus.SC_CREATED)
-                .body("username", Matchers.equalTo("kate200011"))
-                .body("password", Matchers.not(Matchers.equalTo("Kate2000#!")))
-                .body("role", Matchers.equalTo("USER"));
+        CreateUserRequest userRequest = CreateUserRequest.builder()
+                .username(RandomData.getUsername())
+                .password(RandomData.getPassword())
+                .role(UserRole.USER.name())
+                .build();
+
+        CreateUserResponse createdUser = new AdminCreateUserRequester(
+                RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
+                .post(userRequest)
+                .extract()
+                .as(CreateUserResponse.class);
+
+        softly.assertThat(createdUser.getUsername()).isEqualTo(userRequest.getUsername());
+        softly.assertThat(createdUser.getPassword()).isNotEqualTo(userRequest.getPassword());
+        softly.assertThat(createdUser.getRole()).isEqualTo(userRequest.getRole());
     }
 
     public static Stream<Arguments> userInvalidData() {
@@ -83,24 +74,18 @@ public class CreateUserTest {
     @MethodSource("userInvalidData")
     @ParameterizedTest
     public void adminCanNotCreateUserWithInvalidData(String username, String password, String role, String errorKey, String errorValue) {
-        String requestBody = String.format(
-                """
-                        {
-                          "username": "%s",
-                          "password": "%s",
-                          "role": "%s"
-                        }
-                        """, username, password, role);
+        CreateUserRequest userRequest = CreateUserRequest.builder()
+                .username(username)
+                .password(password)
+                .role(role)
+                .build();
 
-        given()
-                .contentType(ContentType.JSON)
-                .accept(ContentType.JSON)
-                .header("Authorization", "Basic YWRtaW46YWRtaW4=")
-                .body(requestBody)
-                .post("http://localhost:4111/api/v1/admin/users")
-                .then()
-                .assertThat()
-                .statusCode(HttpStatus.SC_BAD_REQUEST)
-                .body(errorKey, Matchers.hasItem(errorValue));
+        ResponseSpecification validationError = new ResponseSpecBuilder()
+                .expectStatusCode(HttpStatus.SC_BAD_REQUEST)
+                .expectBody(errorKey, Matchers.hasItem(errorValue))
+                .build();
+
+        new AdminCreateUserRequester(RequestSpecs.adminSpec(), validationError)
+                .post(userRequest);
     }
 }
