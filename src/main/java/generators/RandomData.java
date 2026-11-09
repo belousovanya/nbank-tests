@@ -1,4 +1,4 @@
-package iteration1.generators;
+package generators;
 
 import org.apache.commons.lang3.RandomStringUtils;
 

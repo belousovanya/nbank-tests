@@ -1,9 +1,9 @@
-package iteration1.requests;
+package requests;
 
 import io.restassured.response.ValidatableResponse;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
-import iteration1.models.CreateUserRequest;
+import models.CreateUserRequest;
 
 import static io.restassured.RestAssured.given;
 
