@@ -1,22 +1,23 @@
-package iteration1.requests;
+package requests;
 
 import io.restassured.response.ValidatableResponse;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
-import iteration1.models.BaseModel;
+import models.LoginUserRequest;
 
 import static io.restassured.RestAssured.given;
 
-public class CreateAccountRequester extends Request{
-    public CreateAccountRequester(RequestSpecification requestSpecification, ResponseSpecification responseSpecification) {
+public class LoginUserRequester extends Request<LoginUserRequest> {
+    public LoginUserRequester(RequestSpecification requestSpecification, ResponseSpecification responseSpecification) {
         super(requestSpecification, responseSpecification);
     }
 
     @Override
-    public ValidatableResponse post(BaseModel model) {
-        return  given()
+    public ValidatableResponse post(LoginUserRequest model) {
+        return given()
                 .spec(requestSpecification)
-                .post("/api/v1/accounts")
+                .body(model)
+                .post("/api/v1/auth/login")
                 .then()
                 .assertThat()
                 .spec(responseSpecification);

@@ -1,4 +1,4 @@
-package iteration1.models;
+package models;
 
 public class BaseModel {
 }
