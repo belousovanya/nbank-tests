@@ -1,13 +1,13 @@
 package iteration1;
 
-import iteration1.generators.RandomData;
-import iteration1.models.CreateUserRequest;
-import iteration1.models.LoginUserRequest;
-import iteration1.models.UserRole;
-import iteration1.requests.AdminCreateUserRequester;
-import iteration1.requests.LoginUserRequester;
-import iteration1.specs.RequestSpecs;
-import iteration1.specs.ResponseSpecs;
+import generators.RandomData;
+import models.CreateUserRequest;
+import models.LoginUserRequest;
+import models.UserRole;
+import requests.AdminCreateUserRequester;
+import requests.LoginUserRequester;
+import specs.RequestSpecs;
+import specs.ResponseSpecs;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
