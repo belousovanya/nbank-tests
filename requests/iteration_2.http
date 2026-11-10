@@ -1,0 +1,414 @@
+@userAuth = Basic YW5uYTp2ZXJ5c1RSb25nUGFzc3dvcmQzMyQ=
+@anotherUserAuth = Basic YW5vdGhlcnVzZXI6dmVyeXNUUm9uZ1Bhc3N3b3JkMzMk
+@adminAuth = Basic YWRtaW46YWRtaW4=
+
+### Предусловие: создаём пользователя админом
+# Ожидаемый результат: пользователи anna и anotheruser созданы администратором с ролью USER.
+
+### 1. Получаем авторизацию админа
+# Ожидаемый результат: администратор admin успешно авторизован.
+POST http://localhost:4111/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+### 2. Создаём пользователя anna под админом
+# Ожидаемый результат: создан пользователь anna с ролью USER.
+POST http://localhost:4111/api/v1/admin/users
+Content-Type: application/json
+Authorization: {{adminAuth}}
+
+{
+  "username": "anna",
+  "password": "verysTRongPassword33$",
+  "role": "USER"
+}
+
+### 3. Создаём второго пользователя
+# Ожидаемый результат: создан пользователь anotheruser с ролью USER.
+POST http://localhost:4111/api/v1/admin/users
+Content-Type: application/json
+Authorization: {{adminAuth}}
+
+{
+  "username": "anotheruser",
+  "password": "verysTRongPassword33$",
+  "role": "USER"
+}
+
+### 4. Авторизуемся под пользователем anna
+# Ожидаемый результат: пользователь anna успешно авторизован.
+POST http://localhost:4111/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "anna",
+  "password": "verysTRongPassword33$"
+}
+
+### 5. Авторизуемся под пользователем anotheruser
+# Ожидаемый результат: пользователь anotheruser успешно авторизован.
+POST http://localhost:4111/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "anotheruser",
+  "password": "verysTRongPassword33$"
+}
+
+### Депозит денег пользователем
+# Требования:
+# - Максимальная сумма депозита: 5000.
+# - Сумма должна быть положительной.
+# - Нельзя делать депозит в чужой или несуществующий аккаунт.
+
+### Предусловие: создаём счёт пользователя anna
+# Ожидаемый результат: создан счёт, принадлежащий anna, с балансом 0.
+POST http://localhost:4111/api/v1/accounts
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+### Получаем профиль пользователя и проверяем баланс вручную
+# Ожидаемый результат: получен профиль anna; созданный счёт принадлежит anna и имеет баланс 0.
+GET http://localhost:4111/api/v1/customer/profile
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+### Позитивный кейс: пользователь может пополнить баланс суммой 0.01
+# Ожидаемый результат: депозит проходит, баланс увеличивается на 0.01.
+POST http://localhost:4111/api/v1/accounts/deposit
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "id": 1,
+  "balance": 0.01
+}
+
+### Позитивный кейс: пользователь может пополнить баланс суммой 4999.99
+# Ожидаемый результат: депозит проходит, баланс увеличивается на 4999.99.
+POST http://localhost:4111/api/v1/accounts/deposit
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "id": 1,
+  "balance": 4999.99
+}
+
+### Позитивный кейс: пользователь может пополнить баланс суммой 5000
+# Ожидаемый результат: депозит проходит, баланс увеличивается на 5000.
+POST http://localhost:4111/api/v1/accounts/deposit
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "id": 1,
+  "balance": 5000
+}
+
+### Негативный кейс: пользователь не может пополнить баланс суммой 0
+# Ожидаемый результат: депозит отклонён, баланс не меняется.
+POST http://localhost:4111/api/v1/accounts/deposit
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "id": 1,
+  "balance": 0
+}
+
+### Негативный кейс: пользователь не может пополнить баланс суммой -0.01
+# Ожидаемый результат: депозит отклонён, баланс не меняется.
+POST http://localhost:4111/api/v1/accounts/deposit
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "id": 1,
+  "balance": -0.01
+}
+
+### Негативный кейс: пользователь не может пополнить баланс суммой 5000.01
+# Ожидаемый результат: депозит отклонён, баланс не меняется.
+POST http://localhost:4111/api/v1/accounts/deposit
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "id": 1,
+  "balance": 5000.01
+}
+
+### Негативный кейс: пользователь не может пополнить баланс в чужом аккаунте
+# Ожидаемый результат: депозит отклонён, баланс не меняется.
+
+### Предусловие: создаём счёт пользователя anotheruser
+# Ожидаемый результат: создан счёт, принадлежащий anotheruser, с балансом 0.
+# Получаем id: 3
+POST http://localhost:4111/api/v1/accounts
+Content-Type: application/json
+Authorization: {{anotherUserAuth}}
+
+### Пополняем аккаунт с чужим id 3
+# Ожидаемый результат: депозит отклонён, баланс чужого счёта не меняется.
+POST http://localhost:4111/api/v1/accounts/deposit
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "id": 3,
+  "balance": 5000
+}
+
+### Негативный кейс: пользователь не может пополнить баланс в несуществующем аккаунте
+# Ожидаемый результат: депозит отклонён, баланс не меняется.
+POST http://localhost:4111/api/v1/accounts/deposit
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "id": 999999,
+  "balance": 5000
+}
+
+
+### Перевод денег с одного аккаунта на другой
+# Требования:
+# — Максимальная сумма: 10000
+# — Сумма должна быть положительной и не превышать баланс отправителя
+# — Можно переводить между своими аккаунтами и чужими
+
+### Предусловие: создаём второй счёт пользователя anna
+# Ожидаемый результат: создан второй счёт, принадлежащий anna, с балансом 0.
+# id: 2
+POST http://localhost:4111/api/v1/accounts
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+### Позитивный кейс: пользователь может перевести сумму 0.01 на другой аккаунт
+# Предусловие: перед запросом баланс отправителя не меньше 0.01.
+# Ожидаемый результат: перевод успешен; баланс отправителя уменьшается на 0.01, баланс получателя увеличивается на 0.01.
+POST http://localhost:4111/api/v1/accounts/transfer
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "senderAccountId": 1,
+  "receiverAccountId": 3,
+  "amount": 0.01
+}
+
+### Позитивный кейс: пользователь может перевести сумму 9999.99 на другой аккаунт
+# Предусловие: перед запросом баланс отправителя не меньше 9999.99.
+# Ожидаемый результат: перевод успешен; баланс отправителя уменьшается на 9999.99, баланс получателя увеличивается на 9999.99.
+POST http://localhost:4111/api/v1/accounts/transfer
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "senderAccountId": 1,
+  "receiverAccountId": 3,
+  "amount": 9999.99
+}
+
+### Позитивный кейс: пользователь может перевести сумму 10000 на другой аккаунт
+# Предусловие: перед запросом баланс отправителя не меньше 10000.
+# Ожидаемый результат: перевод успешен; баланс отправителя уменьшается на 10000, баланс получателя увеличивается на 10000.
+POST http://localhost:4111/api/v1/accounts/transfer
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "senderAccountId": 1,
+  "receiverAccountId": 3,
+  "amount": 10000
+}
+
+### Негативный кейс: пользователь не может перевести сумму 10000.01 на другой аккаунт
+# Предусловие: перед запросом баланс отправителя не меньше 10000.01, чтобы проверить лимит перевода при достаточном балансе.
+# Ожидаемый результат: перевод отклонён, балансы отправителя и получателя не меняются.
+POST http://localhost:4111/api/v1/accounts/transfer
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "senderAccountId": 1,
+  "receiverAccountId": 3,
+  "amount": 10000.01
+}
+
+### Негативный кейс: пользователь не может перевести 0 на другой аккаунт
+# Ожидаемый результат: перевод отклонён, балансы отправителя и получателя не меняются.
+POST http://localhost:4111/api/v1/accounts/transfer
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "senderAccountId": 1,
+  "receiverAccountId": 3,
+  "amount": 0
+}
+
+### Негативный кейс: пользователь не может перевести -0.01 на другой аккаунт
+# Ожидаемый результат: перевод отклонён, балансы отправителя и получателя не меняются.
+POST http://localhost:4111/api/v1/accounts/transfer
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "senderAccountId": 1,
+  "receiverAccountId": 3,
+  "amount": -0.01
+}
+
+### Негативный кейс: пользователь не может перевести сумму больше, чем есть на счете
+# Ожидаемый результат: перевод отклонён, балансы отправителя и получателя не меняются.
+### Предусловие: создаём пустой счет счёт пользователя anna
+# Ожидаемый результат: создан счёт, принадлежащий anna, с балансом 0.
+# id: 4
+POST http://localhost:4111/api/v1/accounts
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+### Переводим с пустого счета
+# Ожидаемый результат: перевод 4000 отклонён; баланс отправителя остаётся 0, баланс получателя не меняется.
+POST http://localhost:4111/api/v1/accounts/transfer
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "senderAccountId": 4,
+  "receiverAccountId": 3,
+  "amount": 4000
+}
+
+### Позитивный кейс: Пользователь может перевести себе на другой счет
+# Ожидаемый результат: перевод успешен; баланс отправителя уменьшается на 4000, баланс получателя увеличивается на 4000.
+POST http://localhost:4111/api/v1/accounts/transfer
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "senderAccountId": 1,
+  "receiverAccountId": 2,
+  "amount": 4000
+}
+
+### Позитивный кейс: Пользователь может перевести сумму, равную балансу.
+# Ожидаемый результат: перевод 5000 успешен; баланс отправителя уменьшается на 5000 до 0, баланс получателя увеличивается на 5000.
+### Предусловие: создаём новый счет счёт пользователя anna
+# Ожидаемый результат: создан счёт, принадлежащий anna, с балансом 0.
+# id: 5
+POST http://localhost:4111/api/v1/accounts
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+### Предусловие: пополняем новый счет пользователя anna
+# Ожидаемый результат: депозит успешен, баланс нового счёта anna увеличивается с 0 до 5000.
+POST http://localhost:4111/api/v1/accounts/deposit
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "id": 5,
+  "balance": 5000
+}
+
+### Переводим 5000 на другой счет
+# Ожидаемый результат: перевод успешен; баланс отправителя уменьшается на 5000 до 0, баланс получателя увеличивается на 5000.
+POST http://localhost:4111/api/v1/accounts/transfer
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "senderAccountId": 5,
+  "receiverAccountId": 2,
+  "amount": 5000
+}
+
+
+### Изменение имени пользователя
+# Требование:
+# Имя должно состоять из двух слов,
+# содержащих только буквы и разделённых пробелом.
+
+
+### Позитивный кейс: пользователь может изменить имя на два слова
+# Ожидаемый результат: имя успешно изменено.
+PUT http://localhost:4111/api/v1/customer/profile
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "name": "Anna Smith"
+}
+
+
+### Негативный кейс: пользователь не может указать одно слово
+# Ожидаемый результат: изменение имени отклонено.
+PUT http://localhost:4111/api/v1/customer/profile
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "name": "Anna"
+}
+
+
+### Негативный кейс: пользователь не может указать три слова
+# Ожидаемый результат: изменение имени отклонено.
+PUT http://localhost:4111/api/v1/customer/profile
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "name": "Anna Maria Smith"
+}
+
+
+### Негативный кейс: имя не может содержать цифры
+# Ожидаемый результат: изменение имени отклонено.
+PUT http://localhost:4111/api/v1/customer/profile
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "name": "Anna Sm1th"
+}
+
+
+### Негативный кейс: имя не может содержать спецсимволы
+# Ожидаемый результат: изменение имени отклонено.
+PUT http://localhost:4111/api/v1/customer/profile
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "name": "Anna-Smith"
+}
+
+
+### Негативный кейс: два пробела между словами
+# Ожидаемый результат: изменение имени отклонено.
+PUT http://localhost:4111/api/v1/customer/profile
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "name": "Anna  Smith"
+}
+
+
+### Негативный кейс: пользователь не может указать пустое имя
+# Ожидаемый результат: изменение имени отклонено.
+PUT http://localhost:4111/api/v1/customer/profile
+Content-Type: application/json
+Authorization: {{userAuth}}
+
+{
+  "name": ""
+}
