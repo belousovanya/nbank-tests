@@ -2,11 +2,8 @@ package iteration2;
 
 import common.BaseTest;
 import generators.RandomData;
-import io.restassured.http.ContentType;
-import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import models.*;
-import org.apache.http.HttpStatus;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,9 +13,11 @@ import specs.ResponseSpecs;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-import static io.restassured.RestAssured.given;
-import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class TransferMoneyTest extends BaseTest {
 
@@ -75,8 +74,8 @@ public class TransferMoneyTest extends BaseTest {
 
     @Test
     public void userCanTransferToAnotherUsersAccount() {
-        BigDecimal initialBalance = BigDecimal.valueOf(0.1);
-        BigDecimal transferAmount = BigDecimal.valueOf(0.1);
+        BigDecimal initialBalance = BigDecimal.valueOf(0.01);
+        BigDecimal transferAmount = BigDecimal.valueOf(0.01);
 
         DepositeRequest depositeRequest = DepositeRequest.builder()
                 .id(senderAccountId)
@@ -128,7 +127,7 @@ public class TransferMoneyTest extends BaseTest {
     public void userCanTransferJustBelowLimit() {
         BigDecimal depositAmount = BigDecimal.valueOf(5000);
         BigDecimal initialBalance = BigDecimal.valueOf(10000);
-        BigDecimal transferAmount = BigDecimal.valueOf(9999.9);
+        BigDecimal transferAmount = BigDecimal.valueOf(9999.99);
 
         DepositeRequest depositeRequest = DepositeRequest.builder()
                 .id(senderAccountId)
@@ -283,7 +282,7 @@ public class TransferMoneyTest extends BaseTest {
     @Test
     public void userCannotTransferNegativeAmount() {
         BigDecimal depositAmount = BigDecimal.valueOf(5000);
-        BigDecimal transferAmount = BigDecimal.valueOf(-0.1);
+        BigDecimal transferAmount = BigDecimal.valueOf(-0.01);
 
         DepositeRequest depositeRequest = DepositeRequest.builder()
                 .id(senderAccountId)
@@ -332,225 +331,164 @@ public class TransferMoneyTest extends BaseTest {
 
     @Test
     public void userCannotTransferAboveLimit() {
-        // Готовим достаточный баланс, чтобы проверить именно лимит перевода
-        // Пополняем счёт отправителя несколькими депозитами по 5000
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .body("""
-                        {
-                          "id": %d,
-                          "balance": 5000
-                        }
-                        """.formatted(senderAccountId))
-                .post("http://localhost:4111/api/v1/accounts/deposit")
-                .then()
-                .statusCode(HttpStatus.SC_OK);
+        BigDecimal depositAmount = BigDecimal.valueOf(5000);
+        BigDecimal initialBalance = BigDecimal.valueOf(15000);
+        BigDecimal transferAmount = BigDecimal.valueOf(10000.01);
 
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .body("""
-                        {
-                          "id": %d,
-                          "balance": 5000
-                        }
-                        """.formatted(senderAccountId))
-                .post("http://localhost:4111/api/v1/accounts/deposit")
-                .then()
-                .statusCode(HttpStatus.SC_OK);
+        DepositeRequest depositeRequest = DepositeRequest.builder()
+                .id(senderAccountId)
+                .balance(depositAmount)
+                .build();
 
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .body("""
-                        {
-                          "id": %d,
-                          "balance": 5000
-                        }
-                        """.formatted(senderAccountId))
-                .post("http://localhost:4111/api/v1/accounts/deposit")
-                .then()
-                .statusCode(HttpStatus.SC_OK);
+        DepositeRequester depositeRequester = new DepositeRequester(
+                senderUserSpec, ResponseSpecs.requestReturnsOK());
+        depositeRequester.post(depositeRequest);
+        depositeRequester.post(depositeRequest);
+        depositeRequester.post(depositeRequest);
 
-        // Пытаемся выполнить перевод
-        Response transferResponse = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .body("""
-                        {
-                          "senderAccountId": %d,
-                          "receiverAccountId": %d,
-                          "amount": 10000.1
-                        }
-                        """.formatted(senderAccountId, receiverAccountId))
-                .post("http://localhost:4111/api/v1/accounts/transfer");
+        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+                .get()
+                .extract()
+                .as(DepositeResponse[].class);
 
-        // Запрашиваем балансы после попытки перевода
-        Response senderAccounts = given()
-                .header("Authorization", senderUserSpec)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/accounts");
+        // Средств должно хватать, чтобы отказ был связан с лимитом перевода.
+        assertThat(senderAccounts[0].getBalance())
+                .isEqualByComparingTo(initialBalance);
 
-        Response receiverAccounts = given()
-                .header("Authorization", receiverUserSpec)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/accounts");
+        TransferRequest transferRequest = TransferRequest.builder()
+                .senderAccountId(senderAccountId)
+                .receiverAccountId(receiverAccountId)
+                .amount(transferAmount)
+                .build();
 
-        assertAll(
-                () -> transferResponse.then().statusCode(HttpStatus.SC_BAD_REQUEST),
-                () -> senderAccounts.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("[0].balance", Matchers.equalTo(15000.0f)),
-                () -> receiverAccounts.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("[0].balance", Matchers.equalTo(0.0f))
-        );
+        new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsBadRequest())
+                .post(transferRequest);
+
+        DepositeResponse[] senderAccountsAfterTransfer = new GetAccountsRequester(senderUserSpec)
+                .get()
+                .extract()
+                .as(DepositeResponse[].class);
+
+        DepositeResponse[] receiverAccountsAfterTransfer = new GetAccountsRequester(receiverUserSpec)
+                .get()
+                .extract()
+                .as(DepositeResponse[].class);
+
+        softly.assertThat(senderAccountsAfterTransfer[0].getBalance())
+                .isEqualByComparingTo(initialBalance);
+
+        softly.assertThat(receiverAccountsAfterTransfer[0].getBalance())
+                .isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
     public void userCannotTransferMoreThanAvailableBalance() {
-        // Пытаемся выполнить перевод
-        Response transferResponse = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .body("""
-                        {
-                          "senderAccountId": %d,
-                          "receiverAccountId": %d,
-                          "amount": 4000
-                        }
-                        """.formatted(senderAccountId, receiverAccountId))
-                .post("http://localhost:4111/api/v1/accounts/transfer");
+        BigDecimal transferAmount = BigDecimal.valueOf(4000);
 
-        // Запрашиваем балансы после попытки перевода
-        Response senderAccounts = given()
-                .header("Authorization", senderUserSpec)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/accounts");
+        TransferRequest transferRequest = TransferRequest.builder()
+                .senderAccountId(senderAccountId)
+                .receiverAccountId(receiverAccountId)
+                .amount(transferAmount)
+                .build();
 
-        Response receiverAccounts = given()
-                .header("Authorization", receiverUserSpec)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/accounts");
+        new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsBadRequest())
+                .post(transferRequest);
 
-        assertAll(
-                () -> transferResponse.then().statusCode(HttpStatus.SC_BAD_REQUEST),
-                () -> senderAccounts.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("[0].balance", Matchers.equalTo(0.0f)),
-                () -> receiverAccounts.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("[0].balance", Matchers.equalTo(0.0f))
-        );
+        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+                .get()
+                .extract()
+                .as(DepositeResponse[].class);
+
+        DepositeResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
+                .get()
+                .extract()
+                .as(DepositeResponse[].class);
+
+        softly.assertThat(senderAccounts[0].getBalance())
+                .isEqualByComparingTo(BigDecimal.ZERO);
+
+        softly.assertThat(receiverAccounts[0].getBalance())
+                .isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
     public void userCanTransferBetweenOwnAccounts() {
-        // Создаём второй счёт отправителя
-        int secondOwnAccountId = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .post("http://localhost:4111/api/v1/accounts")
-                .then()
-                .statusCode(HttpStatus.SC_CREATED)
+        BigDecimal initialBalance = BigDecimal.valueOf(5000);
+        BigDecimal transferAmount = BigDecimal.valueOf(4000);
+
+        int secondOwnAccountId = new CreateAccountRequester(senderUserSpec, ResponseSpecs.entityWasCreated())
+                .post(null)
                 .body("id", Matchers.notNullValue())
                 .extract()
                 .path("id");
 
-        // Пополняем счёт отправителя
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .body("""
-                        {
-                          "id": %d,
-                          "balance": 5000
-                        }
-                        """.formatted(senderAccountId))
-                .post("http://localhost:4111/api/v1/accounts/deposit")
-                .then()
-                .statusCode(HttpStatus.SC_OK);
+        DepositeRequest depositeRequest = DepositeRequest.builder()
+                .id(senderAccountId)
+                .balance(initialBalance)
+                .build();
 
-        // Выполняем перевод
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .body("""
-                        {
-                          "senderAccountId": %d,
-                          "receiverAccountId": %d,
-                          "amount": 4000
-                        }
-                        """.formatted(senderAccountId, secondOwnAccountId))
-                .post("http://localhost:4111/api/v1/accounts/transfer")
-                .then()
-                .statusCode(HttpStatus.SC_OK);
+        new DepositeRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
+                .post(depositeRequest);
 
-        // Проверяем баланс обоих счетов
-        given()
-                .header("Authorization", senderUserSpec)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/accounts")
-                .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(1000.0f));
+        TransferRequest transferRequest = TransferRequest.builder()
+                .senderAccountId(senderAccountId)
+                .receiverAccountId(secondOwnAccountId)
+                .amount(transferAmount)
+                .build();
 
-        given()
-                .header("Authorization", senderUserSpec)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/accounts")
-                .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("find { it.id == %d }.balance".formatted(secondOwnAccountId), Matchers.equalTo(4000f));
+        new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
+                .post(transferRequest);
+
+        DepositeResponse[] ownAccounts = new GetAccountsRequester(senderUserSpec)
+                .get()
+                .extract()
+                .as(DepositeResponse[].class);
+
+        Map<Integer, BigDecimal> balancesByAccountId = Arrays.stream(ownAccounts)
+                .collect(Collectors.toMap(DepositeResponse::getId, DepositeResponse::getBalance));
+
+        softly.assertThat(balancesByAccountId.get(senderAccountId))
+                .isEqualByComparingTo(initialBalance.subtract(transferAmount));
+
+        softly.assertThat(balancesByAccountId.get(secondOwnAccountId))
+                .isEqualByComparingTo(transferAmount);
     }
 
     @Test
     public void userCanTransferEntireBalance() {
-        // Пополняем счёт отправителя
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .body("""
-                        {
-                          "id": %d,
-                          "balance": 5000
-                        }
-                        """.formatted(senderAccountId))
-                .post("http://localhost:4111/api/v1/accounts/deposit")
-                .then()
-                .statusCode(HttpStatus.SC_OK);
+        BigDecimal initialBalance = BigDecimal.valueOf(5000);
 
-        // Выполняем перевод
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", senderUserSpec)
-                .body("""
-                        {
-                          "senderAccountId": %d,
-                          "receiverAccountId": %d,
-                          "amount": 5000
-                        }
-                        """.formatted(senderAccountId, receiverAccountId))
-                .post("http://localhost:4111/api/v1/accounts/transfer")
-                .then()
-                .statusCode(HttpStatus.SC_OK);
+        DepositeRequest depositeRequest = DepositeRequest.builder()
+                .id(senderAccountId)
+                .balance(initialBalance)
+                .build();
 
-        // Проверяем баланс обоих счетов
-        given()
-                .header("Authorization", senderUserSpec)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/accounts")
-                .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("[0].balance", Matchers.equalTo(0.0f));
+        new DepositeRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
+                .post(depositeRequest);
 
-        given()
-                .header("Authorization", receiverUserSpec)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/accounts")
-                .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("[0].balance", Matchers.equalTo(5000f));
+        TransferRequest transferRequest = TransferRequest.builder()
+                .senderAccountId(senderAccountId)
+                .receiverAccountId(receiverAccountId)
+                .amount(initialBalance)
+                .build();
+
+        new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
+                .post(transferRequest);
+
+        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+                .get()
+                .extract()
+                .as(DepositeResponse[].class);
+
+        DepositeResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
+                .get()
+                .extract()
+                .as(DepositeResponse[].class);
+
+        softly.assertThat(senderAccounts[0].getBalance())
+                .isEqualByComparingTo(BigDecimal.ZERO);
+
+        softly.assertThat(receiverAccounts[0].getBalance())
+                .isEqualByComparingTo(initialBalance);
     }
 }

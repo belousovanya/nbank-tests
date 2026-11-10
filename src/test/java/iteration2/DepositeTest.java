@@ -51,7 +51,7 @@ public class DepositeTest extends BaseTest {
     }
 
     @ParameterizedTest
-    @ValueSource(doubles = {0.1, 4999.9, 5000})
+    @ValueSource(doubles = {0.01, 4999.99, 5000})
     public void userCanDepositValidAmount(double amount) {
         DepositeRequest depositeRequest = DepositeRequest.builder()
                 .id(accountId)
@@ -78,7 +78,7 @@ public class DepositeTest extends BaseTest {
 
 
     @ParameterizedTest
-    @ValueSource(doubles = {0, -0.1, 5000.1})
+    @ValueSource(doubles = {0, -0.01, 5000.01})
     public void userCanNotDepositInvalidAmount(double amount) {
         DepositeRequest depositeRequest = DepositeRequest.builder()
                 .id(accountId)
