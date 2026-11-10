@@ -109,7 +109,7 @@ public class DepositeTest {
 
 
     @ParameterizedTest
-    @ValueSource(doubles = {0, -0.1, 5000.01})
+    @ValueSource(doubles = {0, -0.01, 5000.01})
     public void userCanNotDepositInvalidAmount(double amount) {
         // 1. Пополняем счёт
         given()

@@ -446,7 +446,7 @@ public class TransferMoneyTest {
                         {
                           "senderAccountId": %d,
                           "receiverAccountId": %d,
-                          "amount": -0.1
+                          "amount": -0.01
                         }
                         """.formatted(senderAccountId, receiverAccountId))
                 .post("http://localhost:4111/api/v1/accounts/transfer");
