@@ -11,11 +11,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TransferMoneyTest {
 
@@ -163,7 +166,7 @@ public class TransferMoneyTest {
                         {
                           "senderAccountId": %d,
                           "receiverAccountId": %d,
-                          "amount": 0.1
+                          "amount": 0.01
                         }
                         """.formatted(senderAccountId, receiverAccountId))
                 .post("http://localhost:4111/api/v1/accounts/transfer")
@@ -177,7 +180,7 @@ public class TransferMoneyTest {
                 .get("http://localhost:4111/api/v1/customer/accounts")
                 .then()
                 .statusCode(HttpStatus.SC_OK)
-                .body("[0].balance", Matchers.equalTo(9999.9f));
+                .body("[0].balance", Matchers.equalTo(9999.99f));
 
         given()
                 .header("Authorization", receiverUserAuthHeader)
@@ -185,7 +188,7 @@ public class TransferMoneyTest {
                 .get("http://localhost:4111/api/v1/customer/accounts")
                 .then()
                 .statusCode(HttpStatus.SC_OK)
-                .body("[0].balance", Matchers.equalTo(0.1f));
+                .body("[0].balance", Matchers.equalTo(0.01f));
     }
 
     @Test
@@ -225,7 +228,7 @@ public class TransferMoneyTest {
                         {
                           "senderAccountId": %d,
                           "receiverAccountId": %d,
-                          "amount": 9999.9
+                          "amount": 9999.99
                         }
                         """.formatted(senderAccountId, receiverAccountId))
                 .post("http://localhost:4111/api/v1/accounts/transfer")
@@ -233,13 +236,17 @@ public class TransferMoneyTest {
                 .statusCode(HttpStatus.SC_OK);
 
         // Проверяем баланс обоих счетов
-        given()
+        double senderBalance = given()
                 .header("Authorization", senderUserAuthHeader)
                 .accept(ContentType.JSON)
                 .get("http://localhost:4111/api/v1/customer/accounts")
                 .then()
                 .statusCode(HttpStatus.SC_OK)
-                .body("[0].balance", Matchers.equalTo(0.1f));
+                .extract()
+                .jsonPath()
+                .getDouble("[0].balance");
+        assertEquals(new BigDecimal("0.01"),
+                BigDecimal.valueOf(senderBalance).setScale(2, RoundingMode.HALF_UP));
 
         given()
                 .header("Authorization", receiverUserAuthHeader)
@@ -247,7 +254,7 @@ public class TransferMoneyTest {
                 .get("http://localhost:4111/api/v1/customer/accounts")
                 .then()
                 .statusCode(HttpStatus.SC_OK)
-                .body("[0].balance", Matchers.equalTo(9999.9f));
+                .body("[0].balance", Matchers.equalTo(9999.99f));
     }
 
     @Test
@@ -517,7 +524,7 @@ public class TransferMoneyTest {
                         {
                           "senderAccountId": %d,
                           "receiverAccountId": %d,
-                          "amount": 10000.1
+                          "amount": 10000.01
                         }
                         """.formatted(senderAccountId, receiverAccountId))
                 .post("http://localhost:4111/api/v1/accounts/transfer");

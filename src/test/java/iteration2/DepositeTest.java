@@ -80,7 +80,7 @@ public class DepositeTest {
     }
 
     @ParameterizedTest
-    @ValueSource(doubles = {0.1, 4999.9, 5000})
+    @ValueSource(doubles = {0.01, 4999.99, 5000})
     public void userCanDepositValidAmount(double amount) {
         // 1. Пополняем счёт
         given()
@@ -109,7 +109,7 @@ public class DepositeTest {
 
 
     @ParameterizedTest
-    @ValueSource(doubles = {0, -0.1, 5000.1})
+    @ValueSource(doubles = {0, -0.1, 5000.01})
     public void userCanNotDepositInvalidAmount(double amount) {
         // 1. Пополняем счёт
         given()
