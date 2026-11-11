@@ -1,13 +1,13 @@
 package iteration2;
 
+import common.AccountLimits;
 import common.BaseTest;
 import generators.RandomData;
 import io.restassured.specification.RequestSpecification;
+import models.AccountResponse;
 import models.CreateUserRequest;
 import models.DepositeRequest;
-import models.DepositeResponse;
 import models.UserRole;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,6 +20,7 @@ import specs.RequestSpecs;
 import specs.ResponseSpecs;
 
 import java.math.BigDecimal;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class DepositeTest extends BaseTest {
 
@@ -44,10 +45,9 @@ public class DepositeTest extends BaseTest {
 
         // 3. Создаем его счёт и сохраняем ID из ответа
         accountId = new CreateAccountRequester(userSpec, ResponseSpecs.entityWasCreated())
-                .post(null)
-                .body("id", Matchers.notNullValue())
+                .post()
                 .extract()
-                .path("id");
+                .as(AccountResponse.class).getId();
     }
 
     @ParameterizedTest
@@ -58,19 +58,19 @@ public class DepositeTest extends BaseTest {
                 .balance(BigDecimal.valueOf(amount))
                 .build();
 
-        DepositeResponse depositeResponse = new DepositeRequester(
+        AccountResponse depositeResponse = new DepositeRequester(
                 userSpec, ResponseSpecs.requestReturnsOK())
                 .post(depositeRequest)
                 .extract()
-                .as(DepositeResponse.class);
+                .as(AccountResponse.class);
 
         softly.assertThat(depositeResponse.getBalance())
                 .isEqualByComparingTo(depositeRequest.getBalance());
 
-        DepositeResponse[] accounts = new GetAccountsRequester(userSpec)
+        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
         softly.assertThat(accounts[0].getBalance())
                 .isEqualByComparingTo(depositeRequest.getBalance());
@@ -88,10 +88,10 @@ public class DepositeTest extends BaseTest {
         new DepositeRequester(userSpec, ResponseSpecs.requestReturnsBadRequest())
                 .post(depositeRequest);
 
-        DepositeResponse[] accounts = new GetAccountsRequester(userSpec)
+        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
         softly.assertThat(accounts[0].getBalance())
                 .isEqualByComparingTo(BigDecimal.ZERO);
@@ -114,23 +114,22 @@ public class DepositeTest extends BaseTest {
 
         // 3. Создаем его счёт и сохраняем ID из ответа
         int anotherAccountId = new CreateAccountRequester(anotherUserSpec, ResponseSpecs.entityWasCreated())
-                .post(null)
-                .body("id", Matchers.notNullValue())
+                .post()
                 .extract()
-                .path("id");
+                .as(AccountResponse.class).getId();
 
         DepositeRequest depositeRequest = DepositeRequest.builder()
                 .id(anotherAccountId)
-                .balance(BigDecimal.valueOf(5000))
+                .balance(RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT))
                 .build();
 
         new DepositeRequester(userSpec, ResponseSpecs.requestReturnsForbidden())
                 .post(depositeRequest);
 
-        DepositeResponse[] accounts = new GetAccountsRequester(anotherUserSpec)
+        AccountResponse[] accounts = new GetAccountsRequester(anotherUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
         softly.assertThat(accounts[0].getBalance())
                 .isEqualByComparingTo(BigDecimal.ZERO);
@@ -138,19 +137,22 @@ public class DepositeTest extends BaseTest {
 
     @Test
     public void userCannotDepositToNonexistentAccount() {
+        // Счетов с такими большими id в системе нет
+        int nonexistentAccountId = ThreadLocalRandom.current().nextInt(1_000_000, Integer.MAX_VALUE);
+
         DepositeRequest depositeRequest = DepositeRequest.builder()
-                .id(99999999)
-                .balance(BigDecimal.valueOf(5000))
+                .id(nonexistentAccountId)
+                .balance(RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT))
                 .build();
 
         new DepositeRequester(userSpec, ResponseSpecs.requestReturnsForbidden())
                 .post(depositeRequest);
 
 
-        DepositeResponse[] accounts = new GetAccountsRequester(userSpec)
+        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
         softly.assertThat(accounts[0].getBalance())
                 .isEqualByComparingTo(BigDecimal.ZERO);

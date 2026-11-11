@@ -1,23 +1,25 @@
 package iteration2;
 
+import common.BaseTest;
 import generators.RandomData;
 import io.restassured.specification.RequestSpecification;
-import models.CreateUserRequest;
-import models.CustomerNameRequest;
-import models.UserRole;
+import models.*;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import requests.AdminCreateUserRequester;
 import requests.CustomerNameRequester;
 import specs.RequestSpecs;
 import specs.ResponseSpecs;
 
+import java.util.stream.Stream;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class ChangeUserNameTest {
-    private static final String INITIAL_NAME = "Jane Doe";
+public class ChangeUserNameTest extends BaseTest {
+    private String initialName;
 
     private RequestSpecification userSpec;
 
@@ -36,29 +38,46 @@ public class ChangeUserNameTest {
                 userRequest.getUsername(), userRequest.getPassword());
 
         // Задаём исходное имя для проверки после отклонённого обновления
+        initialName = RandomData.getName();
         CustomerNameRequest initialNameRequest = CustomerNameRequest.builder()
-                .name(INITIAL_NAME)
+                .name(initialName)
                 .build();
 
         new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
                 .put(initialNameRequest);
+
+        assertThat(getProfile().getName()).isEqualTo(initialName);
     }
 
     @Test
     public void userCanChangeNameToTwoWords() {
-        String newName = "Anna Smith";
+        String newName = RandomData.getName();
         CustomerNameRequest updateRequest = CustomerNameRequest.builder()
                 .name(newName)
                 .build();
 
-        new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
-                .put(updateRequest);
+        UpdateProfileResponse updateResponse = new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
+                .put(updateRequest)
+                .extract()
+                .as(UpdateProfileResponse.class);
 
-        assertThat(getProfileName()).isEqualTo(newName);
+        softly.assertThat(updateResponse.getCustomer().getName()).isEqualTo(newName);
+        softly.assertThat(getProfile().getName()).isEqualTo(newName);
+    }
+
+    public static Stream<String> invalidNames() {
+        return Stream.of(
+                RandomData.getNamePart(),
+                RandomData.getName() + " " + RandomData.getNamePart(),
+                RandomData.getName() + RandomStringUtils.randomNumeric(1),
+                RandomData.getNamePart() + "-" + RandomData.getNamePart(),
+                RandomData.getNamePart() + "  " + RandomData.getNamePart(),
+                ""
+        );
     }
 
     @ParameterizedTest(name = "[{index}] Недопустимое имя - {0}")
-    @ValueSource(strings = {"Anna", "Anna Maria Smith", "Anna Sm1th", "Anna-Smith", "Anna  Smith", ""})
+    @MethodSource("invalidNames")
     public void userCannotChangeNameToInvalidValue(String invalidName) {
         CustomerNameRequest updateRequest = CustomerNameRequest.builder()
                 .name(invalidName)
@@ -67,13 +86,13 @@ public class ChangeUserNameTest {
         new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsBadRequest())
                 .put(updateRequest);
 
-        assertThat(getProfileName()).isEqualTo(INITIAL_NAME);
+        softly.assertThat(getProfile().getName()).isEqualTo(initialName);
     }
 
-    private String getProfileName() {
+    private CustomerResponse getProfile() {
         return new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
                 .get()
                 .extract()
-                .path("name");
+                .as(CustomerResponse.class);
     }
 }

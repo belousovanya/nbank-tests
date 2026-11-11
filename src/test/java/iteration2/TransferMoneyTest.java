@@ -1,12 +1,14 @@
 package iteration2;
 
+import common.AccountLimits;
 import common.BaseTest;
 import generators.RandomData;
 import io.restassured.specification.RequestSpecification;
 import models.*;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import requests.*;
 import specs.RequestSpecs;
 import specs.ResponseSpecs;
@@ -45,10 +47,10 @@ public class TransferMoneyTest extends BaseTest {
 
         // 3. Создаем его счёт и сохраняем ID из ответа
         senderAccountId = new CreateAccountRequester(senderUserSpec, ResponseSpecs.entityWasCreated())
-                .post(null)
-                .body("id", Matchers.notNullValue())
+                .post()
                 .extract()
-                .path("id");
+                .as(AccountResponse.class)
+                .getId();
 
         // 4. Создаем получателя под админом
         CreateUserRequest receiverUserRequest = CreateUserRequest.builder()
@@ -66,36 +68,22 @@ public class TransferMoneyTest extends BaseTest {
 
         // 6. Создаем его счёт и сохраняем ID из ответа
         receiverAccountId = new CreateAccountRequester(receiverUserSpec, ResponseSpecs.entityWasCreated())
-                .post(null)
-                .body("id", Matchers.notNullValue())
+                .post()
                 .extract()
-                .path("id");
+                .as(AccountResponse.class).getId();
     }
 
     @Test
-    public void userCanTransferToAnotherUsersAccount() {
-        BigDecimal initialBalance = BigDecimal.valueOf(0.01);
-        BigDecimal transferAmount = BigDecimal.valueOf(0.01);
+    public void userCanTransferValidAmountToAnotherUsersAccount() {
+        BigDecimal initialBalance = RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT);
+        BigDecimal transferAmount = RandomData.getAmount(AccountLimits.MIN_AMOUNT, initialBalance);
 
-        DepositeRequest depositeRequest = DepositeRequest.builder()
-                .id(senderAccountId)
-                .balance(initialBalance)
-                .build();
+        new DepositeRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
+                .post(DepositeRequest.builder()
+                        .id(senderAccountId)
+                        .balance(initialBalance)
+                        .build());
 
-        DepositeRequester depositRequester = new DepositeRequester(
-                senderUserSpec, ResponseSpecs.requestReturnsOK());
-
-        depositRequester.post(depositeRequest);
-
-        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        softly.assertThat(senderAccounts[0].getBalance())
-                .isEqualByComparingTo(initialBalance);
-
-        // Выполняем перевод
         TransferRequest transferRequest = TransferRequest.builder()
                 .senderAccountId(senderAccountId)
                 .receiverAccountId(receiverAccountId)
@@ -105,254 +93,98 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
                 .post(transferRequest);
 
-        DepositeResponse[] senderAccountsAfterTransfer = new GetAccountsRequester(senderUserSpec)
+        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        DepositeResponse[] receiverAccountsAfterTransfer = new GetAccountsRequester(receiverUserSpec)
+        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-
-        softly.assertThat(senderAccountsAfterTransfer[0].getBalance())
+        // Бэкенд хранит баланс как double (например, 191.43999999999983), поэтому округляем до копеек
+        softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(initialBalance.subtract(transferAmount));
-
-        softly.assertThat(receiverAccountsAfterTransfer[0].getBalance())
+        softly.assertThat(receiverAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(transferAmount);
     }
 
-    @Test
-    public void userCanTransferJustBelowLimit() {
-        BigDecimal depositAmount = BigDecimal.valueOf(5000);
-        BigDecimal initialBalance = BigDecimal.valueOf(10000);
-        BigDecimal transferAmount = BigDecimal.valueOf(9999.99);
+    @ParameterizedTest(name = "[{index}] Граничная сумма перевода - {0}")
+    @ValueSource(strings = {"0.01", "9999.99", "10000.00"})
+    public void userCanTransferBoundaryAmount(BigDecimal transferAmount) {
+        // За один депозит можно положить не больше MAX_DEPOSIT, поэтому пополняем частями
+        DepositeRequester depositeRequester = new DepositeRequester(senderUserSpec, ResponseSpecs.requestReturnsOK());
+        BigDecimal remaining = transferAmount;
+        while (remaining.signum() > 0) {
+            BigDecimal chunk = remaining.min(AccountLimits.MAX_DEPOSIT);
+            depositeRequester.post(DepositeRequest.builder()
+                    .id(senderAccountId)
+                    .balance(chunk)
+                    .build());
+            remaining = remaining.subtract(chunk);
+        }
 
-        DepositeRequest depositeRequest = DepositeRequest.builder()
-                .id(senderAccountId)
-                .balance(depositAmount)
-                .build();
-
-        DepositeRequester depositeRequester = new DepositeRequester(
-                senderUserSpec, ResponseSpecs.requestReturnsOK());
-
-        depositeRequester.post(depositeRequest);
-        depositeRequester.post(depositeRequest);
-
-        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+        AccountResponse[] senderAccountsBeforeTransfer = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        softly.assertThat(senderAccounts[0].getBalance()).isEqualByComparingTo(initialBalance);
+        // Проверка предусловия: на счёте ровно сумма перевода
+        assertThat(senderAccountsBeforeTransfer[0].getBalance().setScale(2, RoundingMode.HALF_UP))
+                .isEqualByComparingTo(transferAmount);
 
         TransferRequest transferRequest = TransferRequest.builder()
                 .senderAccountId(senderAccountId)
                 .receiverAccountId(receiverAccountId)
                 .amount(transferAmount)
                 .build();
+
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
                 .post(transferRequest);
 
-        DepositeResponse[] senderAccountAfterTransfer = new GetAccountsRequester(senderUserSpec)
+        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        DepositeResponse[] receiverAccountAfterTransfer = new GetAccountsRequester(receiverUserSpec)
+        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        BigDecimal actualSenderBalance = senderAccountAfterTransfer[0].getBalance();
-        BigDecimal expectedBalance = initialBalance.subtract(transferAmount);
-        BigDecimal actualReceiverBalance = receiverAccountAfterTransfer[0].getBalance();
-
-        softly.assertThat(actualSenderBalance.setScale(2, RoundingMode.HALF_UP))
-                .isEqualByComparingTo(expectedBalance);
-
-        softly.assertThat(actualReceiverBalance.setScale(2, RoundingMode.HALF_UP))
+        softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
+                .isEqualByComparingTo(BigDecimal.ZERO);
+        softly.assertThat(receiverAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(transferAmount);
     }
 
-    @Test
-    public void userCanTransferMaximumAmount() {
-        BigDecimal depositAmount = BigDecimal.valueOf(5000);
-        BigDecimal initialBalance = BigDecimal.valueOf(10000);
-        BigDecimal transferAmount = BigDecimal.valueOf(10000);
+    @ParameterizedTest(name = "[{index}] Недопустимая сумма перевода - {0}")
+    @ValueSource(strings = {"0", "-0.01", "10000.01"})
+    public void userCannotTransferInvalidAmount(BigDecimal transferAmount) {
+        // Денег на счёте должно хватать, чтобы отказ был именно из-за суммы перевода
+        BigDecimal initialBalance = transferAmount.max(
+                RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT));
 
-        DepositeRequest depositeRequest = DepositeRequest.builder()
-                .id(senderAccountId)
-                .balance(depositAmount)
-                .build();
+        // За один депозит можно положить не больше MAX_DEPOSIT, поэтому пополняем частями
+        DepositeRequester depositeRequester = new DepositeRequester(senderUserSpec, ResponseSpecs.requestReturnsOK());
+        BigDecimal remaining = initialBalance;
+        while (remaining.signum() > 0) {
+            BigDecimal chunk = remaining.min(AccountLimits.MAX_DEPOSIT);
+            depositeRequester.post(DepositeRequest.builder()
+                    .id(senderAccountId)
+                    .balance(chunk)
+                    .build());
+            remaining = remaining.subtract(chunk);
+        }
 
-        DepositeRequester depositeRequester = new DepositeRequester(
-                senderUserSpec, ResponseSpecs.requestReturnsOK());
-
-        depositeRequester.post(depositeRequest);
-        depositeRequester.post(depositeRequest);
-
-        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+        AccountResponse[] senderAccountsBeforeTransfer = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        softly.assertThat(senderAccounts[0].getBalance()).isEqualByComparingTo(initialBalance);
-
-        TransferRequest transferRequest = TransferRequest.builder()
-                .senderAccountId(senderAccountId)
-                .receiverAccountId(receiverAccountId)
-                .amount(transferAmount)
-                .build();
-        new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
-                .post(transferRequest);
-
-        DepositeResponse[] senderAccountAfterTransfer = new GetAccountsRequester(senderUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        DepositeResponse[] receiverAccountAfterTransfer = new GetAccountsRequester(receiverUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        BigDecimal actualSenderBalance = senderAccountAfterTransfer[0].getBalance();
-        BigDecimal expectedBalance = initialBalance.subtract(transferAmount);
-        BigDecimal actualReceiverBalance = receiverAccountAfterTransfer[0].getBalance();
-
-        softly.assertThat(actualSenderBalance.setScale(2, RoundingMode.HALF_UP))
-                .isEqualByComparingTo(expectedBalance);
-
-        softly.assertThat(actualReceiverBalance.setScale(2, RoundingMode.HALF_UP))
-                .isEqualByComparingTo(transferAmount);
-    }
-
-    @Test
-    public void userCannotTransferZeroAmount() {
-        BigDecimal depositAmount = BigDecimal.valueOf(5000);
-        BigDecimal transferAmount = BigDecimal.valueOf(0);
-
-        DepositeRequest depositeRequest = DepositeRequest.builder()
-                .id(senderAccountId)
-                .balance(depositAmount)
-                .build();
-
-        DepositeRequester depositeRequester = new DepositeRequester(
-                senderUserSpec, ResponseSpecs.requestReturnsOK());
-
-        depositeRequester.post(depositeRequest);
-
-        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        softly.assertThat(senderAccounts[0].getBalance()).isEqualByComparingTo(depositAmount);
-
-        TransferRequest transferRequest = TransferRequest.builder()
-                .senderAccountId(senderAccountId)
-                .receiverAccountId(receiverAccountId)
-                .amount(transferAmount)
-                .build();
-        new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsBadRequest())
-                .post(transferRequest);
-
-        DepositeResponse[] senderAccountAfterTransfer = new GetAccountsRequester(senderUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        DepositeResponse[] receiverAccountAfterTransfer = new GetAccountsRequester(receiverUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        BigDecimal actualSenderBalance = senderAccountAfterTransfer[0].getBalance();
-        BigDecimal actualReceiverBalance = receiverAccountAfterTransfer[0].getBalance();
-
-        softly.assertThat(actualSenderBalance)
-                .isEqualByComparingTo(depositAmount);
-
-        softly.assertThat(actualReceiverBalance)
-                .isEqualByComparingTo(BigDecimal.ZERO);
-    }
-
-    @Test
-    public void userCannotTransferNegativeAmount() {
-        BigDecimal depositAmount = BigDecimal.valueOf(5000);
-        BigDecimal transferAmount = BigDecimal.valueOf(-0.01);
-
-        DepositeRequest depositeRequest = DepositeRequest.builder()
-                .id(senderAccountId)
-                .balance(depositAmount)
-                .build();
-
-        DepositeRequester depositeRequester = new DepositeRequester(
-                senderUserSpec, ResponseSpecs.requestReturnsOK());
-
-        depositeRequester.post(depositeRequest);
-
-        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        softly.assertThat(senderAccounts[0].getBalance()).isEqualByComparingTo(depositAmount);
-
-        TransferRequest transferRequest = TransferRequest.builder()
-                .senderAccountId(senderAccountId)
-                .receiverAccountId(receiverAccountId)
-                .amount(transferAmount)
-                .build();
-        new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsBadRequest())
-                .post(transferRequest);
-
-        DepositeResponse[] senderAccountAfterTransfer = new GetAccountsRequester(senderUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        DepositeResponse[] receiverAccountAfterTransfer = new GetAccountsRequester(receiverUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        BigDecimal actualSenderBalance = senderAccountAfterTransfer[0].getBalance();
-        BigDecimal actualReceiverBalance = receiverAccountAfterTransfer[0].getBalance();
-
-        softly.assertThat(actualSenderBalance)
-                .isEqualByComparingTo(depositAmount);
-
-        softly.assertThat(actualReceiverBalance)
-                .isEqualByComparingTo(BigDecimal.ZERO);
-    }
-
-    @Test
-    public void userCannotTransferAboveLimit() {
-        BigDecimal depositAmount = BigDecimal.valueOf(5000);
-        BigDecimal initialBalance = BigDecimal.valueOf(15000);
-        BigDecimal transferAmount = BigDecimal.valueOf(10000.01);
-
-        DepositeRequest depositeRequest = DepositeRequest.builder()
-                .id(senderAccountId)
-                .balance(depositAmount)
-                .build();
-
-        DepositeRequester depositeRequester = new DepositeRequester(
-                senderUserSpec, ResponseSpecs.requestReturnsOK());
-        depositeRequester.post(depositeRequest);
-        depositeRequester.post(depositeRequest);
-        depositeRequester.post(depositeRequest);
-
-        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
-                .get()
-                .extract()
-                .as(DepositeResponse[].class);
-
-        // Средств должно хватать, чтобы отказ был связан с лимитом перевода.
-        assertThat(senderAccounts[0].getBalance())
+        // Проверка предусловия: деньги на счёт действительно положены
+        assertThat(senderAccountsBeforeTransfer[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(initialBalance);
 
         TransferRequest transferRequest = TransferRequest.builder()
@@ -364,26 +196,33 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsBadRequest())
                 .post(transferRequest);
 
-        DepositeResponse[] senderAccountsAfterTransfer = new GetAccountsRequester(senderUserSpec)
+        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        DepositeResponse[] receiverAccountsAfterTransfer = new GetAccountsRequester(receiverUserSpec)
+        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        softly.assertThat(senderAccountsAfterTransfer[0].getBalance())
+        softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(initialBalance);
-
-        softly.assertThat(receiverAccountsAfterTransfer[0].getBalance())
+        softly.assertThat(receiverAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
     public void userCannotTransferMoreThanAvailableBalance() {
-        BigDecimal transferAmount = BigDecimal.valueOf(4000);
+        BigDecimal initialBalance = RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT);
+        // Граница: на одну копейку больше, чем есть на счёте
+        BigDecimal transferAmount = initialBalance.add(AccountLimits.MIN_AMOUNT);
+
+        new DepositeRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
+                .post(DepositeRequest.builder()
+                        .id(senderAccountId)
+                        .balance(initialBalance)
+                        .build());
 
         TransferRequest transferRequest = TransferRequest.builder()
                 .senderAccountId(senderAccountId)
@@ -394,41 +233,38 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsBadRequest())
                 .post(transferRequest);
 
-        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        DepositeResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
+        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        softly.assertThat(senderAccounts[0].getBalance())
-                .isEqualByComparingTo(BigDecimal.ZERO);
-
-        softly.assertThat(receiverAccounts[0].getBalance())
+        softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
+                .isEqualByComparingTo(initialBalance);
+        softly.assertThat(receiverAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
     public void userCanTransferBetweenOwnAccounts() {
-        BigDecimal initialBalance = BigDecimal.valueOf(5000);
-        BigDecimal transferAmount = BigDecimal.valueOf(4000);
-
         int secondOwnAccountId = new CreateAccountRequester(senderUserSpec, ResponseSpecs.entityWasCreated())
-                .post(null)
-                .body("id", Matchers.notNullValue())
+                .post()
                 .extract()
-                .path("id");
+                .as(AccountResponse.class)
+                .getId();
 
-        DepositeRequest depositeRequest = DepositeRequest.builder()
-                .id(senderAccountId)
-                .balance(initialBalance)
-                .build();
+        BigDecimal initialBalance = RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT);
+        BigDecimal transferAmount = RandomData.getAmount(AccountLimits.MIN_AMOUNT, initialBalance);
 
         new DepositeRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
-                .post(depositeRequest);
+                .post(DepositeRequest.builder()
+                        .id(senderAccountId)
+                        .balance(initialBalance)
+                        .build());
 
         TransferRequest transferRequest = TransferRequest.builder()
                 .senderAccountId(senderAccountId)
@@ -439,32 +275,29 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
                 .post(transferRequest);
 
-        DepositeResponse[] ownAccounts = new GetAccountsRequester(senderUserSpec)
+        AccountResponse[] ownAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
         Map<Integer, BigDecimal> balancesByAccountId = Arrays.stream(ownAccounts)
-                .collect(Collectors.toMap(DepositeResponse::getId, DepositeResponse::getBalance));
+                .collect(Collectors.toMap(AccountResponse::getId, AccountResponse::getBalance));
 
-        softly.assertThat(balancesByAccountId.get(senderAccountId))
+        softly.assertThat(balancesByAccountId.get(senderAccountId).setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(initialBalance.subtract(transferAmount));
-
-        softly.assertThat(balancesByAccountId.get(secondOwnAccountId))
+        softly.assertThat(balancesByAccountId.get(secondOwnAccountId).setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(transferAmount);
     }
 
     @Test
     public void userCanTransferEntireBalance() {
-        BigDecimal initialBalance = BigDecimal.valueOf(5000);
-
-        DepositeRequest depositeRequest = DepositeRequest.builder()
-                .id(senderAccountId)
-                .balance(initialBalance)
-                .build();
+        BigDecimal initialBalance = RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT);
 
         new DepositeRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
-                .post(depositeRequest);
+                .post(DepositeRequest.builder()
+                        .id(senderAccountId)
+                        .balance(initialBalance)
+                        .build());
 
         TransferRequest transferRequest = TransferRequest.builder()
                 .senderAccountId(senderAccountId)
@@ -475,20 +308,19 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
                 .post(transferRequest);
 
-        DepositeResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        DepositeResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
+        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(DepositeResponse[].class);
+                .as(AccountResponse[].class);
 
-        softly.assertThat(senderAccounts[0].getBalance())
+        softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(BigDecimal.ZERO);
-
-        softly.assertThat(receiverAccounts[0].getBalance())
+        softly.assertThat(receiverAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(initialBalance);
     }
 }
