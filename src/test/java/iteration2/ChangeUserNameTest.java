@@ -65,6 +65,16 @@ public class ChangeUserNameTest {
                 .extract()
                 .header("Authorization");
 
+        // Проверяем, что созданный пользователь доступен через API
+        given()
+                .header("Authorization", userAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/profile")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("username", Matchers.equalTo(username))
+                .body("role", Matchers.equalTo("USER"));
+
         // Задаём исходное имя, чтобы проверять, сохранилось ли оно при отказе
         given()
                 .contentType(ContentType.JSON)
@@ -77,6 +87,15 @@ public class ChangeUserNameTest {
                 .put("http://localhost:4111/api/v1/customer/profile")
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем, что исходное имя сохранилось перед запуском теста
+        given()
+                .header("Authorization", userAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/profile")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("name", Matchers.equalTo("Jane Doe"));
     }
 
     @Test

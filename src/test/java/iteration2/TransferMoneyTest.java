@@ -75,6 +75,16 @@ public class TransferMoneyTest {
                 .extract()
                 .header("Authorization");
 
+        // Проверяем, что созданный пользователь доступен через API
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/profile")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("username", Matchers.equalTo(username))
+                .body("role", Matchers.equalTo("USER"));
+
         // 3. Создаем его счёт и сохраняем ID из ответа (юзер-отправитель)
         senderAccountId = given()
                 .contentType(ContentType.JSON)
@@ -85,6 +95,16 @@ public class TransferMoneyTest {
                 .body("id", Matchers.notNullValue())
                 .extract()
                 .path("id");
+
+        // Проверяем, что счёт создан с нулевым балансом
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(0.0f));
 
         // 4. Создаем нового получателя под админом
         given()
@@ -117,6 +137,16 @@ public class TransferMoneyTest {
                 .extract()
                 .header("Authorization");
 
+        // Проверяем, что созданный пользователь доступен через API
+        given()
+                .header("Authorization", receiverUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/profile")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("username", Matchers.equalTo(receiverUsername))
+                .body("role", Matchers.equalTo("USER"));
+
         // 6. Создаем его счёт и сохраняем ID из ответа (юзер-получатель)
         receiverAccountId = given()
                 .contentType(ContentType.JSON)
@@ -127,6 +157,16 @@ public class TransferMoneyTest {
                 .body("id", Matchers.notNullValue())
                 .extract()
                 .path("id");
+
+        // Проверяем, что счёт создан с нулевым балансом
+        given()
+                .header("Authorization", receiverUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(receiverAccountId))
+                .body("find { it.id == %d }.balance".formatted(receiverAccountId), Matchers.equalTo(0.0f));
     }
 
     @Test
@@ -145,6 +185,16 @@ public class TransferMoneyTest {
                 .then()
                 .statusCode(HttpStatus.SC_OK);
 
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(5000.0f));
+
         given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", senderUserAuthHeader)
@@ -157,6 +207,16 @@ public class TransferMoneyTest {
                 .post("http://localhost:4111/api/v1/accounts/deposit")
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(10000.0f));
 
         // Выполняем перевод
         given()
@@ -207,6 +267,16 @@ public class TransferMoneyTest {
                 .then()
                 .statusCode(HttpStatus.SC_OK);
 
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(5000.0f));
+
         given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", senderUserAuthHeader)
@@ -219,6 +289,16 @@ public class TransferMoneyTest {
                 .post("http://localhost:4111/api/v1/accounts/deposit")
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(10000.0f));
 
         // Выполняем перевод
         given()
@@ -273,6 +353,16 @@ public class TransferMoneyTest {
                 .then()
                 .statusCode(HttpStatus.SC_OK);
 
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(5000.0f));
+
         given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", senderUserAuthHeader)
@@ -285,6 +375,16 @@ public class TransferMoneyTest {
                 .post("http://localhost:4111/api/v1/accounts/deposit")
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(10000.0f));
 
         // Выполняем перевод
         given()
@@ -335,18 +435,15 @@ public class TransferMoneyTest {
                 .then()
                 .statusCode(HttpStatus.SC_OK);
 
+        // Проверяем сохранённый баланс после пополнения
         given()
-                .contentType(ContentType.JSON)
                 .header("Authorization", senderUserAuthHeader)
-                .body("""
-                        {
-                          "id": %d,
-                          "balance": 5000
-                        }
-                        """.formatted(senderAccountId))
-                .post("http://localhost:4111/api/v1/accounts/deposit")
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
                 .then()
-                .statusCode(HttpStatus.SC_OK);
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(5000.0f));
 
         given()
                 .contentType(ContentType.JSON)
@@ -360,6 +457,39 @@ public class TransferMoneyTest {
                 .post("http://localhost:4111/api/v1/accounts/deposit")
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(10000.0f));
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", senderUserAuthHeader)
+                .body("""
+                        {
+                          "id": %d,
+                          "balance": 5000
+                        }
+                        """.formatted(senderAccountId))
+                .post("http://localhost:4111/api/v1/accounts/deposit")
+                .then()
+                .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(15000.0f));
 
         // Пытаемся выполнить перевод
         Response transferResponse = given()
@@ -412,18 +542,15 @@ public class TransferMoneyTest {
                 .then()
                 .statusCode(HttpStatus.SC_OK);
 
+        // Проверяем сохранённый баланс после пополнения
         given()
-                .contentType(ContentType.JSON)
                 .header("Authorization", senderUserAuthHeader)
-                .body("""
-                        {
-                          "id": %d,
-                          "balance": 5000
-                        }
-                        """.formatted(senderAccountId))
-                .post("http://localhost:4111/api/v1/accounts/deposit")
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
                 .then()
-                .statusCode(HttpStatus.SC_OK);
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(5000.0f));
 
         given()
                 .contentType(ContentType.JSON)
@@ -437,6 +564,39 @@ public class TransferMoneyTest {
                 .post("http://localhost:4111/api/v1/accounts/deposit")
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(10000.0f));
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", senderUserAuthHeader)
+                .body("""
+                        {
+                          "id": %d,
+                          "balance": 5000
+                        }
+                        """.formatted(senderAccountId))
+                .post("http://localhost:4111/api/v1/accounts/deposit")
+                .then()
+                .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(15000.0f));
 
         // Пытаемся выполнить перевод
         Response transferResponse = given()
@@ -490,18 +650,15 @@ public class TransferMoneyTest {
                 .then()
                 .statusCode(HttpStatus.SC_OK);
 
+        // Проверяем сохранённый баланс после пополнения
         given()
-                .contentType(ContentType.JSON)
                 .header("Authorization", senderUserAuthHeader)
-                .body("""
-                        {
-                          "id": %d,
-                          "balance": 5000
-                        }
-                        """.formatted(senderAccountId))
-                .post("http://localhost:4111/api/v1/accounts/deposit")
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
                 .then()
-                .statusCode(HttpStatus.SC_OK);
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(5000.0f));
 
         given()
                 .contentType(ContentType.JSON)
@@ -515,6 +672,39 @@ public class TransferMoneyTest {
                 .post("http://localhost:4111/api/v1/accounts/deposit")
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(10000.0f));
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", senderUserAuthHeader)
+                .body("""
+                        {
+                          "id": %d,
+                          "balance": 5000
+                        }
+                        """.formatted(senderAccountId))
+                .post("http://localhost:4111/api/v1/accounts/deposit")
+                .then()
+                .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(15000.0f));
 
         // Пытаемся выполнить перевод
         Response transferResponse = given()
@@ -601,6 +791,16 @@ public class TransferMoneyTest {
                 .extract()
                 .path("id");
 
+        // Проверяем, что счёт создан с нулевым балансом
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(secondOwnAccountId))
+                .body("find { it.id == %d }.balance".formatted(secondOwnAccountId), Matchers.equalTo(0.0f));
+
         // Пополняем счёт отправителя
         given()
                 .contentType(ContentType.JSON)
@@ -614,6 +814,16 @@ public class TransferMoneyTest {
                 .post("http://localhost:4111/api/v1/accounts/deposit")
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(5000.0f));
 
         // Выполняем перевод
         given()
@@ -663,6 +873,16 @@ public class TransferMoneyTest {
                 .post("http://localhost:4111/api/v1/accounts/deposit")
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+
+        // Проверяем сохранённый баланс после пополнения
+        given()
+                .header("Authorization", senderUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(senderAccountId))
+                .body("find { it.id == %d }.balance".formatted(senderAccountId), Matchers.equalTo(5000.0f));
 
         // Выполняем перевод
         given()

@@ -67,6 +67,16 @@ public class DepositeTest {
                 .extract()
                 .header("Authorization");
 
+        // Проверяем, что созданный пользователь доступен через API
+        given()
+                .header("Authorization", userAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/profile")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("username", Matchers.equalTo(username))
+                .body("role", Matchers.equalTo("USER"));
+
         // 3. Создаем его счёт и сохраняем ID из ответа
         accountId = given()
                 .contentType(ContentType.JSON)
@@ -77,6 +87,16 @@ public class DepositeTest {
                 .body("id", Matchers.notNullValue())
                 .extract()
                 .path("id");
+
+        // Проверяем, что счёт создан с нулевым балансом
+        given()
+                .header("Authorization", userAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(accountId))
+                .body("find { it.id == %d }.balance".formatted(accountId), Matchers.equalTo(0.0f));
     }
 
     @ParameterizedTest
@@ -173,6 +193,16 @@ public class DepositeTest {
                 .extract()
                 .header("Authorization");
 
+        // Проверяем, что созданный пользователь доступен через API
+        given()
+                .header("Authorization", anotherUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/profile")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("username", Matchers.equalTo(anotherUsername))
+                .body("role", Matchers.equalTo("USER"));
+
         // Cоздаём счёт другого пользователя
         int anotherAccountId = given()
                 .contentType(ContentType.JSON)
@@ -183,6 +213,16 @@ public class DepositeTest {
                 .body("id", Matchers.notNullValue())
                 .extract()
                 .path("id");
+
+        // Проверяем, что счёт создан с нулевым балансом
+        given()
+                .header("Authorization", anotherUserAuthHeader)
+                .accept(ContentType.JSON)
+                .get("http://localhost:4111/api/v1/customer/accounts")
+                .then()
+                .statusCode(HttpStatus.SC_OK)
+                .body("id", Matchers.hasItem(anotherAccountId))
+                .body("find { it.id == %d }.balance".formatted(anotherAccountId), Matchers.equalTo(0.0f));
 
         // Основной пользователь пытается пополнить чужой счёт
         // 1. Пополняем счёт
