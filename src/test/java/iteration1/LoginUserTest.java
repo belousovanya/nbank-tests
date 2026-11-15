@@ -1,47 +1,50 @@
 package iteration1;
 
-import generators.RandomData;
+import common.BaseTest;
 import models.CreateUserRequest;
 import models.LoginUserRequest;
+import models.LoginUserResponse;
 import models.UserRole;
-import requests.AdminCreateUserRequester;
-import requests.LoginUserRequester;
-import specs.RequestSpecs;
-import specs.ResponseSpecs;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
+import requests.skelethon.Endpoint;
+import requests.skelethon.requesters.CrudRequester;
+import requests.skelethon.requesters.ValidatedCrudRequester;
+import requests.steps.AdminSteps;
+import specs.RequestSpecs;
+import specs.ResponseSpecs;
 
-public class LoginUserTest {
+public class LoginUserTest extends BaseTest {
     @Test
     public void adminCanGenerateAuthTokenTest() {
-        LoginUserRequest userRequest = LoginUserRequest.builder()
+        LoginUserRequest adminLogin = LoginUserRequest.builder()
                 .username("admin")
                 .password("admin")
                 .build();
 
-        new LoginUserRequester(RequestSpecs.unauthSpec(),
+        LoginUserResponse response = new ValidatedCrudRequester<LoginUserResponse>(
+                RequestSpecs.unauthSpec(),
+                Endpoint.LOGIN,
                 ResponseSpecs.requestReturnsOK())
-                .post(userRequest)
-                .header("Authorization", "Basic YWRtaW46YWRtaW4=");
+                .post(adminLogin);
+
+        softly.assertThat(response.getUsername()).isEqualTo("admin");
+        softly.assertThat(response.getRole()).isEqualTo(UserRole.ADMIN.name());
     }
 
     @Test
     public void userCanGenerateAuthTokenTest() {
-        CreateUserRequest userRequest = CreateUserRequest.builder()
-                .username(RandomData.getUsername())
-                .password(RandomData.getPassword())
-                .role(UserRole.USER.name())
-                .build();
-
-        new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(userRequest);
+        CreateUserRequest user = AdminSteps.createUser();
 
         LoginUserRequest loginRequest = LoginUserRequest.builder()
-                .username(userRequest.getUsername())
-                .password(userRequest.getPassword())
+                .username(user.getUsername())
+                .password(user.getPassword())
                 .build();
 
-        new LoginUserRequester(RequestSpecs.unauthSpec(), ResponseSpecs.requestReturnsOK())
+        new CrudRequester(
+                RequestSpecs.unauthSpec(),
+                Endpoint.LOGIN,
+                ResponseSpecs.requestReturnsOK())
                 .post(loginRequest)
                 .header("Authorization", Matchers.notNullValue());
     }

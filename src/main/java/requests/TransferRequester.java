@@ -18,7 +18,7 @@ public class TransferRequester extends Request<TransferRequest> {
         return given()
                 .spec(requestSpecification)
                 .body(model)
-                .post("/api/v1/accounts/transfer")
+                .post("/accounts/transfer")
                 .then()
                 .assertThat()
                 .spec(responseSpecification);

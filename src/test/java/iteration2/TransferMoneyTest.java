@@ -49,7 +49,7 @@ public class TransferMoneyTest extends BaseTest {
         senderAccountId = new CreateAccountRequester(senderUserSpec, ResponseSpecs.entityWasCreated())
                 .post()
                 .extract()
-                .as(AccountResponse.class)
+                .as(CreateAccountResponse.class)
                 .getId();
 
         // 4. Создаем получателя под админом
@@ -70,7 +70,7 @@ public class TransferMoneyTest extends BaseTest {
         receiverAccountId = new CreateAccountRequester(receiverUserSpec, ResponseSpecs.entityWasCreated())
                 .post()
                 .extract()
-                .as(AccountResponse.class).getId();
+                .as(CreateAccountResponse.class).getId();
     }
 
     @Test
@@ -93,15 +93,15 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
                 .post(transferRequest);
 
-        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+        CreateAccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
-        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
+        CreateAccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
         // Бэкенд хранит баланс как double (например, 191.43999999999983), поэтому округляем до копеек
         softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
@@ -125,10 +125,10 @@ public class TransferMoneyTest extends BaseTest {
             remaining = remaining.subtract(chunk);
         }
 
-        AccountResponse[] senderAccountsBeforeTransfer = new GetAccountsRequester(senderUserSpec)
+        CreateAccountResponse[] senderAccountsBeforeTransfer = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
         // Проверка предусловия: на счёте ровно сумма перевода
         assertThat(senderAccountsBeforeTransfer[0].getBalance().setScale(2, RoundingMode.HALF_UP))
@@ -143,15 +143,15 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
                 .post(transferRequest);
 
-        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+        CreateAccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
-        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
+        CreateAccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
         softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(BigDecimal.ZERO);
@@ -178,10 +178,10 @@ public class TransferMoneyTest extends BaseTest {
             remaining = remaining.subtract(chunk);
         }
 
-        AccountResponse[] senderAccountsBeforeTransfer = new GetAccountsRequester(senderUserSpec)
+        CreateAccountResponse[] senderAccountsBeforeTransfer = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
         // Проверка предусловия: деньги на счёт действительно положены
         assertThat(senderAccountsBeforeTransfer[0].getBalance().setScale(2, RoundingMode.HALF_UP))
@@ -196,15 +196,15 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsBadRequest())
                 .post(transferRequest);
 
-        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+        CreateAccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
-        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
+        CreateAccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
         softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(initialBalance);
@@ -233,15 +233,15 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsBadRequest())
                 .post(transferRequest);
 
-        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+        CreateAccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
-        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
+        CreateAccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
         softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(initialBalance);
@@ -254,7 +254,7 @@ public class TransferMoneyTest extends BaseTest {
         int secondOwnAccountId = new CreateAccountRequester(senderUserSpec, ResponseSpecs.entityWasCreated())
                 .post()
                 .extract()
-                .as(AccountResponse.class)
+                .as(CreateAccountResponse.class)
                 .getId();
 
         BigDecimal initialBalance = RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT);
@@ -275,13 +275,13 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
                 .post(transferRequest);
 
-        AccountResponse[] ownAccounts = new GetAccountsRequester(senderUserSpec)
+        CreateAccountResponse[] ownAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
         Map<Integer, BigDecimal> balancesByAccountId = Arrays.stream(ownAccounts)
-                .collect(Collectors.toMap(AccountResponse::getId, AccountResponse::getBalance));
+                .collect(Collectors.toMap(CreateAccountResponse::getId, CreateAccountResponse::getBalance));
 
         softly.assertThat(balancesByAccountId.get(senderAccountId).setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(initialBalance.subtract(transferAmount));
@@ -308,15 +308,15 @@ public class TransferMoneyTest extends BaseTest {
         new TransferRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
                 .post(transferRequest);
 
-        AccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
+        CreateAccountResponse[] senderAccounts = new GetAccountsRequester(senderUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
-        AccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
+        CreateAccountResponse[] receiverAccounts = new GetAccountsRequester(receiverUserSpec)
                 .get()
                 .extract()
-                .as(AccountResponse[].class);
+                .as(CreateAccountResponse[].class);
 
         softly.assertThat(senderAccounts[0].getBalance().setScale(2, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(BigDecimal.ZERO);

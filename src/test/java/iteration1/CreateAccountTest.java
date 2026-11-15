@@ -1,47 +1,39 @@
 package iteration1;
 
 import io.restassured.specification.RequestSpecification;
-import generators.RandomData;
-import models.AccountResponse;
+import models.CreateAccountResponse;
 import models.CreateUserRequest;
-import models.UserRole;
-import requests.AdminCreateUserRequester;
-import requests.CreateAccountRequester;
-import requests.GetAccountsRequester;
+import org.junit.jupiter.api.Test;
+import requests.skelethon.Endpoint;
+import requests.skelethon.requesters.ValidatedCrudRequester;
+import requests.steps.AdminSteps;
 import specs.RequestSpecs;
 import specs.ResponseSpecs;
-import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class CreateAccountTest {
     @Test
     public void userCanCreateAccountTest() {
-        CreateUserRequest userRequest = CreateUserRequest.builder()
-                .username(RandomData.getUsername())
-                .password(RandomData.getPassword())
-                .role(UserRole.USER.name())
-                .build();
+        CreateUserRequest user = AdminSteps.createUser();
+        RequestSpecification userSpec = RequestSpecs.authAsUser(user.getUsername(), user.getPassword());
 
-        new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(userRequest);
+        CreateAccountResponse createdAccount = new ValidatedCrudRequester<CreateAccountResponse>(
+                userSpec,
+                Endpoint.ACCOUNTS,
+                ResponseSpecs.entityWasCreated())
+                .post();
 
-        RequestSpecification userSpec = RequestSpecs.authAsUser(
-                userRequest.getUsername(), userRequest.getPassword());
+        List<CreateAccountResponse> userAccounts = new ValidatedCrudRequester<CreateAccountResponse>(
+                userSpec,
+                Endpoint.CUSTOMER_ACCOUNTS,
+                ResponseSpecs.requestReturnsOK())
+                .getAll();
 
-        int accountId = new CreateAccountRequester(userSpec, ResponseSpecs.entityWasCreated())
-                .post()
-                .extract()
-                .as(AccountResponse.class)
-                .getId();
-
-        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
-                .get()
-                .extract()
-                .as(AccountResponse[].class);
-
-        assertThat(accounts)
-                .extracting(AccountResponse::getId)
-                .contains(accountId);
+        assertThat(userAccounts)
+                .extracting(CreateAccountResponse::getId)
+                .contains(createdAccount.getId());
     }
 }
