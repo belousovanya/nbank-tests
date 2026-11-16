@@ -1,17 +1,15 @@
 package iteration1;
 
 import common.BaseTest;
-import io.restassured.builder.ResponseSpecBuilder;
-import io.restassured.specification.ResponseSpecification;
-import generators.RandomData;
+import generators.RandomModelGenerator;
 import models.CreateUserRequest;
 import models.CreateUserResponse;
-import models.UserRole;
-import requests.AdminCreateUserRequester;
+import models.comparison.ModelAssertions;
+import requests.skelethon.Endpoint;
+import requests.skelethon.requesters.CrudRequester;
+import requests.skelethon.requesters.ValidatedCrudRequester;
 import specs.RequestSpecs;
 import specs.ResponseSpecs;
-import org.apache.http.HttpStatus;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -22,21 +20,18 @@ import java.util.stream.Stream;
 public class CreateUserTest extends BaseTest {
     @Test
     public void adminCanCreateUserWithCorrectData() {
-        CreateUserRequest userRequest = CreateUserRequest.builder()
-                .username(RandomData.getUsername())
-                .password(RandomData.getPassword())
-                .role(UserRole.USER.name())
-                .build();
+        CreateUserRequest createUserRequest = RandomModelGenerator.generate(CreateUserRequest.class);
 
-        CreateUserResponse createdUser = new AdminCreateUserRequester(
-                RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(userRequest)
-                .extract()
-                .as(CreateUserResponse.class);
+        CreateUserResponse createdUser = new ValidatedCrudRequester<CreateUserResponse>(
+                RequestSpecs.adminSpec(),
+                Endpoint.ADMIN_USER,
+                ResponseSpecs.entityWasCreated())
+                .post(createUserRequest);
 
-        softly.assertThat(createdUser.getUsername()).isEqualTo(userRequest.getUsername());
-        softly.assertThat(createdUser.getPassword()).isNotEqualTo(userRequest.getPassword());
-        softly.assertThat(createdUser.getRole()).isEqualTo(userRequest.getRole());
+        // username и role сравниваются по правилам из model-comparison.properties
+        ModelAssertions.assertThatModels(createUserRequest, createdUser).match();
+        // пароль возвращается захэшированным, поэтому он НЕ должен совпадать с исходным
+        softly.assertThat(createdUser.getPassword()).isNotEqualTo(createUserRequest.getPassword());
     }
 
     public static Stream<Arguments> userInvalidData() {
@@ -75,18 +70,16 @@ public class CreateUserTest extends BaseTest {
     @MethodSource("userInvalidData")
     @ParameterizedTest
     public void adminCanNotCreateUserWithInvalidData(String username, String password, String role, String errorKey, String errorValue) {
-        CreateUserRequest userRequest = CreateUserRequest.builder()
+        CreateUserRequest createUserRequest = CreateUserRequest.builder()
                 .username(username)
                 .password(password)
                 .role(role)
                 .build();
 
-        ResponseSpecification validationError = new ResponseSpecBuilder()
-                .expectStatusCode(HttpStatus.SC_BAD_REQUEST)
-                .expectBody(errorKey, Matchers.hasItem(errorValue))
-                .build();
-
-        new AdminCreateUserRequester(RequestSpecs.adminSpec(), validationError)
-                .post(userRequest);
+        new CrudRequester(
+                RequestSpecs.adminSpec(),
+                Endpoint.ADMIN_USER,
+                ResponseSpecs.requestReturnsBadRequest(errorKey, errorValue))
+                .post(createUserRequest);
     }
 }

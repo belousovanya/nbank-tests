@@ -8,7 +8,7 @@ import models.CustomerNameRequest;
 import static io.restassured.RestAssured.given;
 
 public class CustomerNameRequester {
-    private static final String PROFILE_PATH = "/api/v1/customer/profile";
+    private static final String PROFILE_PATH = "/customer/profile";
 
     private final RequestSpecification requestSpecification;
     private final ResponseSpecification responseSpecification;
