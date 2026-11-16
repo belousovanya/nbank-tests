@@ -1,5 +1,6 @@
 package iteration1;
 
+import common.BaseTest;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.specification.ResponseSpecification;
 import generators.RandomData;

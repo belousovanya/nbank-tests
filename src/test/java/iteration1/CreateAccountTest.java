@@ -2,16 +2,17 @@ package iteration1;
 
 import io.restassured.specification.RequestSpecification;
 import generators.RandomData;
+import models.AccountResponse;
 import models.CreateUserRequest;
 import models.UserRole;
 import requests.AdminCreateUserRequester;
 import requests.CreateAccountRequester;
+import requests.GetAccountsRequester;
 import specs.RequestSpecs;
 import specs.ResponseSpecs;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
-import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class CreateAccountTest {
     @Test
@@ -29,16 +30,18 @@ public class CreateAccountTest {
                 userRequest.getUsername(), userRequest.getPassword());
 
         int accountId = new CreateAccountRequester(userSpec, ResponseSpecs.entityWasCreated())
-                .post(null)
-                .body("id", Matchers.notNullValue())
+                .post()
                 .extract()
-                .path("id");
+                .as(AccountResponse.class)
+                .getId();
 
-        given()
-                .spec(userSpec)
-                .get("/api/v1/customer/accounts")
-                .then()
-                .spec(ResponseSpecs.requestReturnsOK())
-                .body("id", Matchers.hasItem(accountId));
+        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
+                .get()
+                .extract()
+                .as(AccountResponse[].class);
+
+        assertThat(accounts)
+                .extracting(AccountResponse::getId)
+                .contains(accountId);
     }
 }

@@ -1,287 +1,106 @@
 package iteration2;
 
-import io.restassured.RestAssured;
-import io.restassured.filter.log.RequestLoggingFilter;
-import io.restassured.filter.log.ResponseLoggingFilter;
-import io.restassured.http.ContentType;
-import io.restassured.response.Response;
-import org.apache.http.HttpStatus;
-import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeAll;
+import common.BaseTest;
+import generators.RandomData;
+import io.restassured.specification.RequestSpecification;
+import models.*;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import requests.AdminCreateUserRequester;
+import requests.CustomerNameRequester;
+import specs.RequestSpecs;
+import specs.ResponseSpecs;
 
-import java.util.List;
-import java.util.UUID;
+import java.util.stream.Stream;
 
-import static io.restassured.RestAssured.given;
-import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.assertj.core.api.Assertions.assertThat;
 
-public class ChangeUserNameTest {
+public class ChangeUserNameTest extends BaseTest {
+    private String initialName;
 
-    private String userAuthHeader;
-
-    @BeforeAll
-    public static void setupRestAssured() {
-        RestAssured.filters(
-                List.of(new RequestLoggingFilter(),
-                        new ResponseLoggingFilter()));
-    }
+    private RequestSpecification userSpec;
 
     @BeforeEach
     public void prepareUser() {
-        String username = "user"
-                + UUID.randomUUID().toString().substring(0, 10);
-        String password = "verysTRongPassword33$";
+        CreateUserRequest userRequest = CreateUserRequest.builder()
+                .username(RandomData.getUsername())
+                .password(RandomData.getPassword())
+                .role(UserRole.USER.name())
+                .build();
 
-        // 1. Создаём нового пользователя под админом
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Basic YWRtaW46YWRtaW4=")
-                .body("""
-                        {
-                          "username": "%s",
-                          "password": "%s",
-                          "role": "USER"
-                        }
-                        """.formatted(username, password))
-                .post("http://localhost:4111/api/v1/admin/users")
-                .then()
-                .statusCode(HttpStatus.SC_CREATED);
-
-        // 2. Авторизуемся созданным пользователем
-        userAuthHeader = given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "username": "%s",
-                          "password": "%s"
-                        }
-                        """.formatted(username, password))
-                .post("http://localhost:4111/api/v1/auth/login")
-                .then()
-                .statusCode(HttpStatus.SC_OK)
-                .header("Authorization", Matchers.notNullValue())
+        CustomerResponse createdUser = new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
+                .post(userRequest)
                 .extract()
-                .header("Authorization");
+                .as(CustomerResponse.class);
 
-        // Проверяем, что созданный пользователь доступен через API
-        given()
-                .header("Authorization", userAuthHeader)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/profile")
-                .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("username", Matchers.equalTo(username))
-                .body("role", Matchers.equalTo("USER"));
+        userSpec = RequestSpecs.authAsUser(
+                userRequest.getUsername(), userRequest.getPassword());
 
-        // Задаём исходное имя, чтобы проверять, сохранилось ли оно при отказе
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", userAuthHeader)
-                .body("""
-                        {
-                          "name": "Jane Doe"
-                        }
-                        """)
-                .put("http://localhost:4111/api/v1/customer/profile")
-                .then()
-                .statusCode(HttpStatus.SC_OK);
+        // Проверяем через GET, что пользователь действительно создан
+        CustomerResponse userProfile = getProfile();
+        assertThat(userProfile.getId()).isEqualTo(createdUser.getId());
+        assertThat(userProfile.getUsername()).isEqualTo(userRequest.getUsername());
+        assertThat(userProfile.getRole()).isEqualTo(userRequest.getRole());
 
-        // Проверяем, что исходное имя сохранилось перед запуском теста
-        given()
-                .header("Authorization", userAuthHeader)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/profile")
-                .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("name", Matchers.equalTo("Jane Doe"));
+        // Задаём исходное имя для проверки после отклонённого обновления
+        initialName = RandomData.getName();
+        CustomerNameRequest initialNameRequest = CustomerNameRequest.builder()
+                .name(initialName)
+                .build();
+
+        new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
+                .put(initialNameRequest);
+
+        assertThat(getProfile().getName()).isEqualTo(initialName);
     }
 
     @Test
     public void userCanChangeNameToTwoWords() {
-        // Меняем имя на два слова
-        given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", userAuthHeader)
-                .body("""
-                        {
-                          "name": "Anna Smith"
-                        }
-                        """)
-                .put("http://localhost:4111/api/v1/customer/profile")
-                .then()
-                .statusCode(HttpStatus.SC_OK);
+        String newName = RandomData.getName();
+        CustomerNameRequest updateRequest = CustomerNameRequest.builder()
+                .name(newName)
+                .build();
 
-        // Проверяем имя в сохранённом профиле
-        given()
-                .header("Authorization", userAuthHeader)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/profile")
-                .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("name", Matchers.equalTo("Anna Smith"));
+        UpdateProfileResponse updateResponse = new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
+                .put(updateRequest)
+                .extract()
+                .as(UpdateProfileResponse.class);
+
+        softly.assertThat(updateResponse.getCustomer().getName()).isEqualTo(newName);
+        softly.assertThat(getProfile().getName()).isEqualTo(newName);
     }
 
-    @Test
-    public void userCannotChangeNameToOneWord() {
-        // Пытаемся установить некорректное имя
-        Response updateResponse = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", userAuthHeader)
-                .body("""
-                        {
-                          "name": "Anna"
-                        }
-                        """)
-                .put("http://localhost:4111/api/v1/customer/profile");
-
-        // Проверяем, что запрос отклонён и исходное имя сохранилось
-        Response profileResponse = given()
-                .header("Authorization", userAuthHeader)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/profile");
-
-        assertAll(
-                () -> updateResponse.then().statusCode(HttpStatus.SC_BAD_REQUEST),
-                () -> profileResponse.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("name", Matchers.equalTo("Jane Doe"))
+    public static Stream<String> invalidNames() {
+        return Stream.of(
+                RandomData.getNamePart(),
+                RandomData.getName() + " " + RandomData.getNamePart(),
+                RandomData.getName() + RandomStringUtils.randomNumeric(1),
+                RandomData.getNamePart() + "-" + RandomData.getNamePart(),
+                RandomData.getNamePart() + "  " + RandomData.getNamePart(),
+                ""
         );
     }
 
-    @Test
-    public void userCannotChangeNameToThreeWords() {
-        // Пытаемся установить некорректное имя
-        Response updateResponse = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", userAuthHeader)
-                .body("""
-                        {
-                          "name": "Anna Maria Smith"
-                        }
-                        """)
-                .put("http://localhost:4111/api/v1/customer/profile");
+    @ParameterizedTest(name = "[{index}] Недопустимое имя - {0}")
+    @MethodSource("invalidNames")
+    public void userCannotChangeNameToInvalidValue(String invalidName) {
+        CustomerNameRequest updateRequest = CustomerNameRequest.builder()
+                .name(invalidName)
+                .build();
 
-        // Проверяем, что запрос отклонён и исходное имя сохранилось
-        Response profileResponse = given()
-                .header("Authorization", userAuthHeader)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/profile");
+        new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsBadRequest())
+                .put(updateRequest);
 
-        assertAll(
-                () -> updateResponse.then().statusCode(HttpStatus.SC_BAD_REQUEST),
-                () -> profileResponse.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("name", Matchers.equalTo("Jane Doe"))
-        );
+        softly.assertThat(getProfile().getName()).isEqualTo(initialName);
     }
 
-    @Test
-    public void userCannotChangeNameToOneContainingDigits() {
-        // Пытаемся установить некорректное имя
-        Response updateResponse = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", userAuthHeader)
-                .body("""
-                        {
-                          "name": "Anna Sm1th"
-                        }
-                        """)
-                .put("http://localhost:4111/api/v1/customer/profile");
-
-        // Проверяем, что запрос отклонён и исходное имя сохранилось
-        Response profileResponse = given()
-                .header("Authorization", userAuthHeader)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/profile");
-
-        assertAll(
-                () -> updateResponse.then().statusCode(HttpStatus.SC_BAD_REQUEST),
-                () -> profileResponse.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("name", Matchers.equalTo("Jane Doe"))
-        );
-    }
-
-    @Test
-    public void userCannotChangeNameToOneContainingSpecialCharacters() {
-        // Пытаемся установить некорректное имя
-        Response updateResponse = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", userAuthHeader)
-                .body("""
-                        {
-                          "name": "Anna-Smith"
-                        }
-                        """)
-                .put("http://localhost:4111/api/v1/customer/profile");
-
-        // Проверяем, что запрос отклонён и исходное имя сохранилось
-        Response profileResponse = given()
-                .header("Authorization", userAuthHeader)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/profile");
-
-        assertAll(
-                () -> updateResponse.then().statusCode(HttpStatus.SC_BAD_REQUEST),
-                () -> profileResponse.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("name", Matchers.equalTo("Jane Doe"))
-        );
-    }
-
-    @Test
-    public void userCannotChangeNameToWordsSeparatedByTwoSpaces() {
-        // Пытаемся установить некорректное имя
-        Response updateResponse = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", userAuthHeader)
-                .body("""
-                        {
-                          "name": "Anna  Smith"
-                        }
-                        """)
-                .put("http://localhost:4111/api/v1/customer/profile");
-
-        // Проверяем, что запрос отклонён и исходное имя сохранилось
-        Response profileResponse = given()
-                .header("Authorization", userAuthHeader)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/profile");
-
-        assertAll(
-                () -> updateResponse.then().statusCode(HttpStatus.SC_BAD_REQUEST),
-                () -> profileResponse.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("name", Matchers.equalTo("Jane Doe"))
-        );
-    }
-
-    @Test
-    public void userCannotChangeNameToEmptyString() {
-        // Пытаемся установить некорректное имя
-        Response updateResponse = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", userAuthHeader)
-                .body("""
-                        {
-                          "name": ""
-                        }
-                        """)
-                .put("http://localhost:4111/api/v1/customer/profile");
-
-        // Проверяем, что запрос отклонён и исходное имя сохранилось
-        Response profileResponse = given()
-                .header("Authorization", userAuthHeader)
-                .accept(ContentType.JSON)
-                .get("http://localhost:4111/api/v1/customer/profile");
-
-        assertAll(
-                () -> updateResponse.then().statusCode(HttpStatus.SC_BAD_REQUEST),
-                () -> profileResponse.then()
-                        .statusCode(HttpStatus.SC_OK)
-                        .body("name", Matchers.equalTo("Jane Doe"))
-        );
+    private CustomerResponse getProfile() {
+        return new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
+                .get()
+                .extract()
+                .as(CustomerResponse.class);
     }
 }
