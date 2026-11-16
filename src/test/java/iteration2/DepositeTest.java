@@ -6,6 +6,7 @@ import generators.RandomData;
 import io.restassured.specification.RequestSpecification;
 import models.AccountResponse;
 import models.CreateUserRequest;
+import models.CustomerResponse;
 import models.DepositeRequest;
 import models.UserRole;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import requests.AdminCreateUserRequester;
 import requests.CreateAccountRequester;
+import requests.CustomerNameRequester;
 import requests.DepositeRequester;
 import requests.GetAccountsRequester;
 import specs.RequestSpecs;
@@ -21,6 +23,8 @@ import specs.ResponseSpecs;
 
 import java.math.BigDecimal;
 import java.util.concurrent.ThreadLocalRandom;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class DepositeTest extends BaseTest {
 
@@ -36,12 +40,23 @@ public class DepositeTest extends BaseTest {
                 .role(UserRole.USER.name())
                 .build();
 
-        new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(userRequest);
+        CustomerResponse createdUser = new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
+                .post(userRequest)
+                .extract()
+                .as(CustomerResponse.class);
 
         // 2. Авторизуемся созданным пользователем
         userSpec = RequestSpecs.authAsUser(
                 userRequest.getUsername(), userRequest.getPassword());
+
+        // Проверяем через GET, что пользователь действительно создан
+        CustomerResponse userProfile = new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
+                .get()
+                .extract()
+                .as(CustomerResponse.class);
+        assertThat(userProfile.getId()).isEqualTo(createdUser.getId());
+        assertThat(userProfile.getUsername()).isEqualTo(userRequest.getUsername());
+        assertThat(userProfile.getRole()).isEqualTo(userRequest.getRole());
 
         // 3. Создаем его счёт и сохраняем ID из ответа
         accountId = new CreateAccountRequester(userSpec, ResponseSpecs.entityWasCreated())
@@ -105,12 +120,23 @@ public class DepositeTest extends BaseTest {
                 .role(UserRole.USER.name())
                 .build();
 
-        new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(anotherUserRequest);
+        CustomerResponse createdAnotherUser = new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
+                .post(anotherUserRequest)
+                .extract()
+                .as(CustomerResponse.class);
 
         // 2. Авторизуемся созданным пользователем
         RequestSpecification anotherUserSpec = RequestSpecs.authAsUser(
                 anotherUserRequest.getUsername(), anotherUserRequest.getPassword());
+
+        // Проверяем через GET, что пользователь действительно создан
+        CustomerResponse anotherUserProfile = new CustomerNameRequester(anotherUserSpec, ResponseSpecs.requestReturnsOK())
+                .get()
+                .extract()
+                .as(CustomerResponse.class);
+        assertThat(anotherUserProfile.getId()).isEqualTo(createdAnotherUser.getId());
+        assertThat(anotherUserProfile.getUsername()).isEqualTo(anotherUserRequest.getUsername());
+        assertThat(anotherUserProfile.getRole()).isEqualTo(anotherUserRequest.getRole());
 
         // 3. Создаем его счёт и сохраняем ID из ответа
         int anotherAccountId = new CreateAccountRequester(anotherUserSpec, ResponseSpecs.entityWasCreated())
