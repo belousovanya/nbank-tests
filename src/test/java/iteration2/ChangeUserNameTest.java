@@ -31,11 +31,19 @@ public class ChangeUserNameTest extends BaseTest {
                 .role(UserRole.USER.name())
                 .build();
 
-        new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(userRequest);
+        CustomerResponse createdUser = new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
+                .post(userRequest)
+                .extract()
+                .as(CustomerResponse.class);
 
         userSpec = RequestSpecs.authAsUser(
                 userRequest.getUsername(), userRequest.getPassword());
+
+        // Проверяем через GET, что пользователь действительно создан
+        CustomerResponse userProfile = getProfile();
+        assertThat(userProfile.getId()).isEqualTo(createdUser.getId());
+        assertThat(userProfile.getUsername()).isEqualTo(userRequest.getUsername());
+        assertThat(userProfile.getRole()).isEqualTo(userRequest.getRole());
 
         // Задаём исходное имя для проверки после отклонённого обновления
         initialName = RandomData.getName();

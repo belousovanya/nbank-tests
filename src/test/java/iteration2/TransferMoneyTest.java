@@ -38,12 +38,23 @@ public class TransferMoneyTest extends BaseTest {
                 .role(UserRole.USER.name())
                 .build();
 
-        new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(senderUserRequest);
+        CustomerResponse createdSenderUser = new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
+                .post(senderUserRequest)
+                .extract()
+                .as(CustomerResponse.class);
 
         // 2. Авторизуемся под отправителем
         senderUserSpec = RequestSpecs.authAsUser(
                 senderUserRequest.getUsername(), senderUserRequest.getPassword());
+
+        // Проверяем через GET, что пользователь действительно создан
+        CustomerResponse senderUserProfile = new CustomerNameRequester(senderUserSpec, ResponseSpecs.requestReturnsOK())
+                .get()
+                .extract()
+                .as(CustomerResponse.class);
+        assertThat(senderUserProfile.getId()).isEqualTo(createdSenderUser.getId());
+        assertThat(senderUserProfile.getUsername()).isEqualTo(senderUserRequest.getUsername());
+        assertThat(senderUserProfile.getRole()).isEqualTo(senderUserRequest.getRole());
 
         // 3. Создаем его счёт и сохраняем ID из ответа
         senderAccountId = new CreateAccountRequester(senderUserSpec, ResponseSpecs.entityWasCreated())
@@ -59,12 +70,23 @@ public class TransferMoneyTest extends BaseTest {
                 .role(UserRole.USER.name())
                 .build();
 
-        new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(receiverUserRequest);
+        CustomerResponse createdReceiverUser = new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
+                .post(receiverUserRequest)
+                .extract()
+                .as(CustomerResponse.class);
 
         // 5. Авторизуемся под получателем
         receiverUserSpec = RequestSpecs.authAsUser(
                 receiverUserRequest.getUsername(), receiverUserRequest.getPassword());
+
+        // Проверяем через GET, что пользователь действительно создан
+        CustomerResponse receiverUserProfile = new CustomerNameRequester(receiverUserSpec, ResponseSpecs.requestReturnsOK())
+                .get()
+                .extract()
+                .as(CustomerResponse.class);
+        assertThat(receiverUserProfile.getId()).isEqualTo(createdReceiverUser.getId());
+        assertThat(receiverUserProfile.getUsername()).isEqualTo(receiverUserRequest.getUsername());
+        assertThat(receiverUserProfile.getRole()).isEqualTo(receiverUserRequest.getRole());
 
         // 6. Создаем его счёт и сохраняем ID из ответа
         receiverAccountId = new CreateAccountRequester(receiverUserSpec, ResponseSpecs.entityWasCreated())
