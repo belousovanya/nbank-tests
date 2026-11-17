@@ -4,19 +4,16 @@ import generators.RandomModelGenerator;
 import models.CreateUserRequest;
 import models.CreateUserResponse;
 import requests.skelethon.Endpoint;
-import requests.skelethon.requesters.ValidatedCrudRequester;
+import requests.skelethon.ValidatedRequests;
 import specs.RequestSpecs;
-import specs.ResponseSpecs;
 
 public class AdminSteps {
     public static CreateUserRequest createUser() {
         CreateUserRequest userRequest =
                 RandomModelGenerator.generate(CreateUserRequest.class);
 
-        new ValidatedCrudRequester<CreateUserResponse>(
-                RequestSpecs.adminSpec(),
-                Endpoint.ADMIN_USER,
-                ResponseSpecs.entityWasCreated())
+        new ValidatedRequests(RequestSpecs.adminSpec())
+                .<CreateUserResponse>request(Endpoint.ADMIN_USER)
                 .post(userRequest);
 
         return userRequest;

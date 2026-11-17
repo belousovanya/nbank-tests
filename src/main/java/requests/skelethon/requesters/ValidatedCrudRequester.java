@@ -31,23 +31,22 @@ public class ValidatedCrudRequester<T extends BaseModel> extends HttpRequest imp
 
     @Override
     public List<T> getAll() {
-        // ответ — JSON-массив, поэтому читаем его как массив responseModel из endpoint
         T[] items = (T[]) crudRequester.getAll().extract().as(endpoint.getResponseModel().arrayType());
         return Arrays.asList(items);
     }
 
     @Override
-    public Object get(long id) {
-        return null;
+    public T get() {
+        return (T) crudRequester.get().extract().as(endpoint.getResponseModel());
     }
 
     @Override
-    public Object put(long id, BaseModel model) {
-        return null;
+    public T put(BaseModel model) {
+        return (T) crudRequester.put(model).extract().as(endpoint.getResponseModel());
     }
 
     @Override
-    public Object delete(long id) {
+    public T delete(long id) {
         return null;
     }
 }

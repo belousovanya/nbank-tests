@@ -13,7 +13,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class CreateAccountResponse extends BaseModel {
+public class AccountResponse extends BaseModel {
     private int id;
     private String accountNumber;
     private BigDecimal balance;

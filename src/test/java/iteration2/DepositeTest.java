@@ -4,7 +4,7 @@ import common.AccountLimits;
 import common.BaseTest;
 import generators.RandomData;
 import io.restassured.specification.RequestSpecification;
-import models.CreateAccountResponse;
+import models.AccountResponse;
 import models.CreateUserRequest;
 import models.DepositeRequest;
 import models.UserRole;
@@ -47,7 +47,7 @@ public class DepositeTest extends BaseTest {
         accountId = new CreateAccountRequester(userSpec, ResponseSpecs.entityWasCreated())
                 .post()
                 .extract()
-                .as(CreateAccountResponse.class).getId();
+                .as(AccountResponse.class).getId();
     }
 
     @ParameterizedTest
@@ -58,19 +58,19 @@ public class DepositeTest extends BaseTest {
                 .balance(BigDecimal.valueOf(amount))
                 .build();
 
-        CreateAccountResponse depositeResponse = new DepositeRequester(
+        AccountResponse depositeResponse = new DepositeRequester(
                 userSpec, ResponseSpecs.requestReturnsOK())
                 .post(depositeRequest)
                 .extract()
-                .as(CreateAccountResponse.class);
+                .as(AccountResponse.class);
 
         softly.assertThat(depositeResponse.getBalance())
                 .isEqualByComparingTo(depositeRequest.getBalance());
 
-        CreateAccountResponse[] accounts = new GetAccountsRequester(userSpec)
+        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
                 .get()
                 .extract()
-                .as(CreateAccountResponse[].class);
+                .as(AccountResponse[].class);
 
         softly.assertThat(accounts[0].getBalance())
                 .isEqualByComparingTo(depositeRequest.getBalance());
@@ -88,10 +88,10 @@ public class DepositeTest extends BaseTest {
         new DepositeRequester(userSpec, ResponseSpecs.requestReturnsBadRequest())
                 .post(depositeRequest);
 
-        CreateAccountResponse[] accounts = new GetAccountsRequester(userSpec)
+        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
                 .get()
                 .extract()
-                .as(CreateAccountResponse[].class);
+                .as(AccountResponse[].class);
 
         softly.assertThat(accounts[0].getBalance())
                 .isEqualByComparingTo(BigDecimal.ZERO);
@@ -116,7 +116,7 @@ public class DepositeTest extends BaseTest {
         int anotherAccountId = new CreateAccountRequester(anotherUserSpec, ResponseSpecs.entityWasCreated())
                 .post()
                 .extract()
-                .as(CreateAccountResponse.class).getId();
+                .as(AccountResponse.class).getId();
 
         DepositeRequest depositeRequest = DepositeRequest.builder()
                 .id(anotherAccountId)
@@ -126,10 +126,10 @@ public class DepositeTest extends BaseTest {
         new DepositeRequester(userSpec, ResponseSpecs.requestReturnsForbidden())
                 .post(depositeRequest);
 
-        CreateAccountResponse[] accounts = new GetAccountsRequester(anotherUserSpec)
+        AccountResponse[] accounts = new GetAccountsRequester(anotherUserSpec)
                 .get()
                 .extract()
-                .as(CreateAccountResponse[].class);
+                .as(AccountResponse[].class);
 
         softly.assertThat(accounts[0].getBalance())
                 .isEqualByComparingTo(BigDecimal.ZERO);
@@ -149,10 +149,10 @@ public class DepositeTest extends BaseTest {
                 .post(depositeRequest);
 
 
-        CreateAccountResponse[] accounts = new GetAccountsRequester(userSpec)
+        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
                 .get()
                 .extract()
-                .as(CreateAccountResponse[].class);
+                .as(AccountResponse[].class);
 
         softly.assertThat(accounts[0].getBalance())
                 .isEqualByComparingTo(BigDecimal.ZERO);
