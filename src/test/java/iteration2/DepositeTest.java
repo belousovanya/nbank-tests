@@ -6,63 +6,35 @@ import generators.RandomData;
 import io.restassured.specification.RequestSpecification;
 import models.AccountResponse;
 import models.CreateUserRequest;
-import models.CustomerResponse;
 import models.DepositeRequest;
-import models.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import requests.AdminCreateUserRequester;
-import requests.CreateAccountRequester;
-import requests.CustomerNameRequester;
-import requests.DepositeRequester;
-import requests.GetAccountsRequester;
+import requests.skelethon.Endpoint;
+import requests.skelethon.ValidatedRequests;
+import requests.skelethon.requesters.CrudRequester;
+import requests.steps.AdminSteps;
+import requests.steps.UserSteps;
 import specs.RequestSpecs;
 import specs.ResponseSpecs;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 public class DepositeTest extends BaseTest {
 
     private RequestSpecification userSpec;
+    private UserSteps userSteps;
     private int accountId;
 
     @BeforeEach
     public void prepareUserAndAccount() {
-        // 1. Создаем нового пользователя под админом
-        CreateUserRequest userRequest = CreateUserRequest.builder()
-                .username(RandomData.getUsername())
-                .password(RandomData.getPassword())
-                .role(UserRole.USER.name())
-                .build();
-
-        CustomerResponse createdUser = new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(userRequest)
-                .extract()
-                .as(CustomerResponse.class);
-
-        // 2. Авторизуемся созданным пользователем
-        userSpec = RequestSpecs.authAsUser(
-                userRequest.getUsername(), userRequest.getPassword());
-
-        // Проверяем через GET, что пользователь действительно создан
-        CustomerResponse userProfile = new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
-                .get()
-                .extract()
-                .as(CustomerResponse.class);
-        assertThat(userProfile.getId()).isEqualTo(createdUser.getId());
-        assertThat(userProfile.getUsername()).isEqualTo(userRequest.getUsername());
-        assertThat(userProfile.getRole()).isEqualTo(userRequest.getRole());
-
-        // 3. Создаем его счёт и сохраняем ID из ответа
-        accountId = new CreateAccountRequester(userSpec, ResponseSpecs.entityWasCreated())
-                .post()
-                .extract()
-                .as(AccountResponse.class).getId();
+        CreateUserRequest user = AdminSteps.createUser();
+        userSpec = RequestSpecs.authAsUser(user.getUsername(), user.getPassword());
+        userSteps = new UserSteps(userSpec);
+        accountId = userSteps.createAccount().getId();
     }
 
     @ParameterizedTest
@@ -73,21 +45,16 @@ public class DepositeTest extends BaseTest {
                 .balance(BigDecimal.valueOf(amount))
                 .build();
 
-        AccountResponse depositeResponse = new DepositeRequester(
-                userSpec, ResponseSpecs.requestReturnsOK())
-                .post(depositeRequest)
-                .extract()
-                .as(AccountResponse.class);
+        AccountResponse depositeResponse = new ValidatedRequests(userSpec)
+                .<AccountResponse>request(Endpoint.DEPOSIT)
+                .post(depositeRequest);
 
         softly.assertThat(depositeResponse.getBalance())
                 .isEqualByComparingTo(depositeRequest.getBalance());
 
-        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
-                .get()
-                .extract()
-                .as(AccountResponse[].class);
+        List<AccountResponse> accounts = userSteps.getAccounts();
 
-        softly.assertThat(accounts[0].getBalance())
+        softly.assertThat(accounts.get(0).getBalance())
                 .isEqualByComparingTo(depositeRequest.getBalance());
     }
 
@@ -100,64 +67,33 @@ public class DepositeTest extends BaseTest {
                 .balance(BigDecimal.valueOf(amount))
                 .build();
 
-        new DepositeRequester(userSpec, ResponseSpecs.requestReturnsBadRequest())
+        new CrudRequester(userSpec, Endpoint.DEPOSIT, ResponseSpecs.requestReturnsBadRequest())
                 .post(depositeRequest);
 
-        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
-                .get()
-                .extract()
-                .as(AccountResponse[].class);
+        List<AccountResponse> accounts = userSteps.getAccounts();
 
-        softly.assertThat(accounts[0].getBalance())
+        softly.assertThat(accounts.get(0).getBalance())
                 .isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
     public void userCannotDepositToAnotherUsersAccount() {
-        CreateUserRequest anotherUserRequest = CreateUserRequest.builder()
-                .username(RandomData.getUsername())
-                .password(RandomData.getPassword())
-                .role(UserRole.USER.name())
-                .build();
-
-        CustomerResponse createdAnotherUser = new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(anotherUserRequest)
-                .extract()
-                .as(CustomerResponse.class);
-
-        // 2. Авторизуемся созданным пользователем
-        RequestSpecification anotherUserSpec = RequestSpecs.authAsUser(
-                anotherUserRequest.getUsername(), anotherUserRequest.getPassword());
-
-        // Проверяем через GET, что пользователь действительно создан
-        CustomerResponse anotherUserProfile = new CustomerNameRequester(anotherUserSpec, ResponseSpecs.requestReturnsOK())
-                .get()
-                .extract()
-                .as(CustomerResponse.class);
-        assertThat(anotherUserProfile.getId()).isEqualTo(createdAnotherUser.getId());
-        assertThat(anotherUserProfile.getUsername()).isEqualTo(anotherUserRequest.getUsername());
-        assertThat(anotherUserProfile.getRole()).isEqualTo(anotherUserRequest.getRole());
-
-        // 3. Создаем его счёт и сохраняем ID из ответа
-        int anotherAccountId = new CreateAccountRequester(anotherUserSpec, ResponseSpecs.entityWasCreated())
-                .post()
-                .extract()
-                .as(AccountResponse.class).getId();
+        CreateUserRequest anotherUser = AdminSteps.createUser();
+        RequestSpecification anotherUserSpec = RequestSpecs.authAsUser(anotherUser.getUsername(), anotherUser.getPassword());
+        UserSteps anotherUserSteps = new UserSteps(anotherUserSpec);
+        int anotherAccountId = anotherUserSteps.createAccount().getId();
 
         DepositeRequest depositeRequest = DepositeRequest.builder()
                 .id(anotherAccountId)
                 .balance(RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT))
                 .build();
 
-        new DepositeRequester(userSpec, ResponseSpecs.requestReturnsForbidden())
+        new CrudRequester(userSpec, Endpoint.DEPOSIT, ResponseSpecs.requestReturnsForbidden())
                 .post(depositeRequest);
 
-        AccountResponse[] accounts = new GetAccountsRequester(anotherUserSpec)
-                .get()
-                .extract()
-                .as(AccountResponse[].class);
+        List<AccountResponse> accounts = anotherUserSteps.getAccounts();
 
-        softly.assertThat(accounts[0].getBalance())
+        softly.assertThat(accounts.get(0).getBalance())
                 .isEqualByComparingTo(BigDecimal.ZERO);
     }
 
@@ -171,16 +107,12 @@ public class DepositeTest extends BaseTest {
                 .balance(RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT))
                 .build();
 
-        new DepositeRequester(userSpec, ResponseSpecs.requestReturnsForbidden())
+        new CrudRequester(userSpec, Endpoint.DEPOSIT, ResponseSpecs.requestReturnsForbidden())
                 .post(depositeRequest);
 
+        List<AccountResponse> accounts = userSteps.getAccounts();
 
-        AccountResponse[] accounts = new GetAccountsRequester(userSpec)
-                .get()
-                .extract()
-                .as(AccountResponse[].class);
-
-        softly.assertThat(accounts[0].getBalance())
+        softly.assertThat(accounts.get(0).getBalance())
                 .isEqualByComparingTo(BigDecimal.ZERO);
     }
 }

@@ -7,7 +7,7 @@ import models.CreateUserResponse;
 import models.comparison.ModelAssertions;
 import requests.skelethon.Endpoint;
 import requests.skelethon.requesters.CrudRequester;
-import requests.skelethon.requesters.ValidatedCrudRequester;
+import requests.skelethon.ValidatedRequests;
 import specs.RequestSpecs;
 import specs.ResponseSpecs;
 import org.junit.jupiter.api.Test;
@@ -22,10 +22,8 @@ public class CreateUserTest extends BaseTest {
     public void adminCanCreateUserWithCorrectData() {
         CreateUserRequest createUserRequest = RandomModelGenerator.generate(CreateUserRequest.class);
 
-        CreateUserResponse createdUser = new ValidatedCrudRequester<CreateUserResponse>(
-                RequestSpecs.adminSpec(),
-                Endpoint.ADMIN_USER,
-                ResponseSpecs.entityWasCreated())
+        CreateUserResponse createdUser = new ValidatedRequests(RequestSpecs.adminSpec())
+                .<CreateUserResponse>request(Endpoint.ADMIN_USER)
                 .post(createUserRequest);
 
         // username и role сравниваются по правилам из model-comparison.properties
@@ -38,7 +36,7 @@ public class CreateUserTest extends BaseTest {
         String passwordError = "Password must contain at least one digit, one lower case, one upper case, one special character, no spaces, and be at least 8 characters long";
 
         return Stream.of(
-                // username field validation
+                // username
                 Arguments.of("   ", "Password33$", "USER", "username", "Username cannot be blank"),
                 Arguments.of("ab", "Password33$", "USER", "username", "Username must be between 3 and 15 characters"),
                 Arguments.of("abcdefghijklmnop", "Password33$", "USER", "username", "Username must be between 3 and 15 characters"),
@@ -52,7 +50,7 @@ public class CreateUserTest extends BaseTest {
                 Arguments.of("abc@", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
                 Arguments.of("abc#", "Password33$", "USER", "username", "Username must contain only letters, digits, dashes, underscores, and dots"),
 
-                // password field validation
+                // password
                 Arguments.of("validuser", "", "USER", "password", "Password cannot be blank"),
                 Arguments.of("validuser", "Aa1!abc", "USER", "password", passwordError), // 7 символов
                 Arguments.of("validuser", "Password!", "USER", "password", passwordError), // без цифр
@@ -61,7 +59,7 @@ public class CreateUserTest extends BaseTest {
                 Arguments.of("validuser", "Password33", "USER", "password", passwordError), // без спецсимвола
                 Arguments.of("validuser", "Password 33!", "USER", "password", passwordError), // с пробелом
 
-                // role field validation
+                // role
                 Arguments.of("validuser", "Password33$", "EDITOR", "role", "Role must be either 'ADMIN' or 'USER'")
         );
 

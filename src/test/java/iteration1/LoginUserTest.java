@@ -9,7 +9,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import requests.skelethon.Endpoint;
 import requests.skelethon.requesters.CrudRequester;
-import requests.skelethon.requesters.ValidatedCrudRequester;
+import requests.skelethon.ValidatedRequests;
 import requests.steps.AdminSteps;
 import specs.RequestSpecs;
 import specs.ResponseSpecs;
@@ -22,10 +22,8 @@ public class LoginUserTest extends BaseTest {
                 .password("admin")
                 .build();
 
-        LoginUserResponse response = new ValidatedCrudRequester<LoginUserResponse>(
-                RequestSpecs.unauthSpec(),
-                Endpoint.LOGIN,
-                ResponseSpecs.requestReturnsOK())
+        LoginUserResponse response = new ValidatedRequests(RequestSpecs.unauthSpec())
+                .<LoginUserResponse>request(Endpoint.LOGIN)
                 .post(adminLogin);
 
         softly.assertThat(response.getUsername()).isEqualTo("admin");
