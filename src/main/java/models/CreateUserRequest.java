@@ -1,5 +1,6 @@
 package models;
 
+import constants.AuthConstants;
 import generators.GeneratingRule;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,6 +20,6 @@ public class CreateUserRequest extends BaseModel {
     @GeneratingRule(regex = "[A-Z]{3}[a-z]{4}[0-9]{3}[!@#$%]{2}")
     private String password;
 
-    @GeneratingRule(regex = "USER")
+    @GeneratingRule(regex = AuthConstants.ROLE_USER)
     private String role;
 }

@@ -1,6 +1,7 @@
 package specs;
 
 import configs.Config;
+import constants.AuthConstants;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.filter.log.RequestLoggingFilter;
 import io.restassured.filter.log.ResponseLoggingFilter;
@@ -15,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 public class RequestSpecs {
-    private static Map<String, String> authHeaders = new HashMap<>(Map.of("admin", "Basic YWRtaW46YWRtaW4="));
+    private static Map<String, String> authHeaders = new HashMap<>();
 
     private RequestSpecs(){}
 
@@ -25,7 +26,7 @@ public class RequestSpecs {
                 .setAccept(ContentType.JSON)
                 .addFilters( List.of(new RequestLoggingFilter(),
                         new ResponseLoggingFilter()))
-                .setBaseUri(Config.getProperty("server") +Config.getProperty("apiVersion"));
+                .setBaseUri(Config.getProperty(Config.SERVER) + Config.getProperty(Config.API_VERSION));
     }
 
     public static RequestSpecification unauthSpec() {
@@ -33,8 +34,12 @@ public class RequestSpecs {
     }
 
     public static RequestSpecification adminSpec() {
+        return authAsUser(AuthConstants.ADMIN_USERNAME, AuthConstants.ADMIN_PASSWORD);
+    }
+
+    public static RequestSpecification withAuthHeader(String authHeader) {
         return defaultRequestBuilder()
-                .addHeader("Authorization", authHeaders.get("admin"))
+                .addHeader(AuthConstants.HEADER_AUTHORIZATION, authHeader)
                 .build();
     }
 
@@ -48,15 +53,13 @@ public class RequestSpecs {
                     ResponseSpecs.requestReturnsOK())
                     .post(LoginUserRequest.builder().username(username).password(password).build())
                     .extract()
-                    .header("Authorization");
+                    .header(AuthConstants.HEADER_AUTHORIZATION);
 
             authHeaders.put(username, userAuthHeader);
         } else {
             userAuthHeader = authHeaders.get(username);
         }
 
-        return defaultRequestBuilder()
-                .addHeader("Authorization", userAuthHeader)
-                .build();
+        return withAuthHeader(userAuthHeader);
     }
 }

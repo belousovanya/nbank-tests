@@ -5,6 +5,9 @@ import java.io.InputStream;
 import java.util.Properties;
 
 public class Config {
+    public static final String SERVER = "server";
+    public static final String API_VERSION = "apiVersion";
+
     private static final Config INSTANCE = new Config();
     private final Properties properties = new Properties();
 

@@ -1,14 +1,14 @@
 package iteration1;
 
 import io.restassured.specification.RequestSpecification;
-import models.CreateAccountResponse;
+import models.AccountResponse;
 import models.CreateUserRequest;
 import org.junit.jupiter.api.Test;
 import requests.skelethon.Endpoint;
-import requests.skelethon.requesters.ValidatedCrudRequester;
+import requests.skelethon.ValidatedRequests;
 import requests.steps.AdminSteps;
+import requests.steps.UserSteps;
 import specs.RequestSpecs;
-import specs.ResponseSpecs;
 
 import java.util.List;
 
@@ -20,20 +20,14 @@ public class CreateAccountTest {
         CreateUserRequest user = AdminSteps.createUser();
         RequestSpecification userSpec = RequestSpecs.authAsUser(user.getUsername(), user.getPassword());
 
-        CreateAccountResponse createdAccount = new ValidatedCrudRequester<CreateAccountResponse>(
-                userSpec,
-                Endpoint.ACCOUNTS,
-                ResponseSpecs.entityWasCreated())
+        AccountResponse createdAccount = new ValidatedRequests(userSpec)
+                .<AccountResponse>request(Endpoint.ACCOUNTS)
                 .post();
 
-        List<CreateAccountResponse> userAccounts = new ValidatedCrudRequester<CreateAccountResponse>(
-                userSpec,
-                Endpoint.CUSTOMER_ACCOUNTS,
-                ResponseSpecs.requestReturnsOK())
-                .getAll();
+        List<AccountResponse> userAccounts = new UserSteps(userSpec).getAccounts();
 
         assertThat(userAccounts)
-                .extracting(CreateAccountResponse::getId)
+                .extracting(AccountResponse::getId)
                 .contains(createdAccount.getId());
     }
 }
