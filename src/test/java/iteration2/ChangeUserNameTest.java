@@ -6,7 +6,9 @@ import generators.RandomModelGenerator;
 import io.restassured.specification.RequestSpecification;
 import models.CreateUserRequest;
 import models.CustomerNameRequest;
+import models.CustomerResponse;
 import models.UpdateProfileResponse;
+import models.comparison.ModelAssertions;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +24,6 @@ import specs.ResponseSpecs;
 
 import java.util.stream.Stream;
 
-import static org.assertj.core.api.Assertions.assertThat;
 
 public class ChangeUserNameTest extends BaseTest {
     private String initialName;
@@ -37,7 +38,6 @@ public class ChangeUserNameTest extends BaseTest {
 
         initialName = RandomModelGenerator.generate(CustomerNameRequest.class).getName();
         userSteps.changeName(initialName);
-        assertThat(userSteps.getProfile().getName()).isEqualTo(initialName);
     }
 
     @Test
@@ -48,8 +48,10 @@ public class ChangeUserNameTest extends BaseTest {
                 .<UpdateProfileResponse>request(Endpoint.UPDATE_PROFILE)
                 .put(updateRequest);
 
+        CustomerResponse profile = userSteps.getProfile();
+
         softly.assertThat(updateResponse.getCustomer().getName()).isEqualTo(updateRequest.getName());
-        softly.assertThat(userSteps.getProfile().getName()).isEqualTo(updateRequest.getName());
+        ModelAssertions.assertThatModels(updateResponse.getCustomer(), profile).match();
     }
 
     public static Stream<String> invalidNames() {

@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class DepositeTest extends BaseTest {
+    private static final int NONEXISTENT_ACCOUNT_ID_MIN = 1_000_000;
 
     private RequestSpecification userSpec;
     private UserSteps userSteps;
@@ -99,8 +100,7 @@ public class DepositeTest extends BaseTest {
 
     @Test
     public void userCannotDepositToNonexistentAccount() {
-        // Счетов с такими большими id в системе нет
-        int nonexistentAccountId = ThreadLocalRandom.current().nextInt(1_000_000, Integer.MAX_VALUE);
+        int nonexistentAccountId = ThreadLocalRandom.current().nextInt(NONEXISTENT_ACCOUNT_ID_MIN, Integer.MAX_VALUE);
 
         DepositeRequest depositeRequest = DepositeRequest.builder()
                 .id(nonexistentAccountId)

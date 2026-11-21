@@ -15,6 +15,13 @@ public enum Endpoint {
             HttpStatus.SC_CREATED
     ),
 
+    ADMIN_ALL_USERS(
+            "/admin/users",
+            BaseModel.class,
+            CustomerResponse.class,
+            HttpStatus.SC_OK
+    ),
+
     LOGIN(
             "/auth/login",
             LoginUserRequest.class,

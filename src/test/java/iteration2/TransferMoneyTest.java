@@ -124,9 +124,9 @@ public class TransferMoneyTest extends BaseTest {
         Map<Integer, BigDecimal> balancesByAccountId = senderSteps.getAccounts().stream()
                 .collect(Collectors.toMap(AccountResponse::getId, AccountResponse::getBalance));
 
-        softly.assertThat(balancesByAccountId.get(senderAccountId).setScale(2, RoundingMode.HALF_UP))
+        softly.assertThat(balancesByAccountId.get(senderAccountId).setScale(AccountLimits.MONEY_SCALE, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(initialBalance.subtract(transferAmount));
-        softly.assertThat(balancesByAccountId.get(secondOwnAccountId).setScale(2, RoundingMode.HALF_UP))
+        softly.assertThat(balancesByAccountId.get(secondOwnAccountId).setScale(AccountLimits.MONEY_SCALE, RoundingMode.HALF_UP))
                 .isEqualByComparingTo(transferAmount);
     }
 
@@ -162,8 +162,7 @@ public class TransferMoneyTest extends BaseTest {
         }
     }
 
-    // Бэкенд хранит баланс как double (например, 191.43999999999983), поэтому округляем до копеек
     private BigDecimal balanceOf(UserSteps steps) {
-        return steps.getAccounts().get(0).getBalance().setScale(2, RoundingMode.HALF_UP);
+        return steps.getAccounts().get(0).getBalance().setScale(AccountLimits.MONEY_SCALE, RoundingMode.HALF_UP);
     }
 }
