@@ -1,4 +1,4 @@
-package iteration1;
+package iteration1.api;
 
 import io.restassured.specification.RequestSpecification;
 import models.AccountResponse;
