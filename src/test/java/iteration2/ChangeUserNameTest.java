@@ -2,75 +2,56 @@ package iteration2;
 
 import common.BaseTest;
 import generators.RandomData;
+import generators.RandomModelGenerator;
 import io.restassured.specification.RequestSpecification;
-import models.*;
+import models.CreateUserRequest;
+import models.CustomerNameRequest;
+import models.CustomerResponse;
+import models.UpdateProfileResponse;
+import models.comparison.ModelAssertions;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import requests.AdminCreateUserRequester;
-import requests.CustomerNameRequester;
+import requests.skelethon.Endpoint;
+import requests.skelethon.ValidatedRequests;
+import requests.skelethon.requesters.CrudRequester;
+import requests.steps.AdminSteps;
+import requests.steps.UserSteps;
 import specs.RequestSpecs;
 import specs.ResponseSpecs;
 
 import java.util.stream.Stream;
 
-import static org.assertj.core.api.Assertions.assertThat;
 
 public class ChangeUserNameTest extends BaseTest {
     private String initialName;
-
     private RequestSpecification userSpec;
+    private UserSteps userSteps;
 
     @BeforeEach
     public void prepareUser() {
-        CreateUserRequest userRequest = CreateUserRequest.builder()
-                .username(RandomData.getUsername())
-                .password(RandomData.getPassword())
-                .role(UserRole.USER.name())
-                .build();
+        CreateUserRequest user = AdminSteps.createUser();
+        userSpec = RequestSpecs.authAsUser(user.getUsername(), user.getPassword());
+        userSteps = new UserSteps(userSpec);
 
-        CustomerResponse createdUser = new AdminCreateUserRequester(RequestSpecs.adminSpec(), ResponseSpecs.entityWasCreated())
-                .post(userRequest)
-                .extract()
-                .as(CustomerResponse.class);
-
-        userSpec = RequestSpecs.authAsUser(
-                userRequest.getUsername(), userRequest.getPassword());
-
-        // Проверяем через GET, что пользователь действительно создан
-        CustomerResponse userProfile = getProfile();
-        assertThat(userProfile.getId()).isEqualTo(createdUser.getId());
-        assertThat(userProfile.getUsername()).isEqualTo(userRequest.getUsername());
-        assertThat(userProfile.getRole()).isEqualTo(userRequest.getRole());
-
-        // Задаём исходное имя для проверки после отклонённого обновления
-        initialName = RandomData.getName();
-        CustomerNameRequest initialNameRequest = CustomerNameRequest.builder()
-                .name(initialName)
-                .build();
-
-        new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
-                .put(initialNameRequest);
-
-        assertThat(getProfile().getName()).isEqualTo(initialName);
+        initialName = RandomModelGenerator.generate(CustomerNameRequest.class).getName();
+        userSteps.changeName(initialName);
     }
 
     @Test
     public void userCanChangeNameToTwoWords() {
-        String newName = RandomData.getName();
-        CustomerNameRequest updateRequest = CustomerNameRequest.builder()
-                .name(newName)
-                .build();
+        CustomerNameRequest updateRequest = RandomModelGenerator.generate(CustomerNameRequest.class);
 
-        UpdateProfileResponse updateResponse = new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
-                .put(updateRequest)
-                .extract()
-                .as(UpdateProfileResponse.class);
+        UpdateProfileResponse updateResponse = new ValidatedRequests(userSpec)
+                .<UpdateProfileResponse>request(Endpoint.UPDATE_PROFILE)
+                .put(updateRequest);
 
-        softly.assertThat(updateResponse.getCustomer().getName()).isEqualTo(newName);
-        softly.assertThat(getProfile().getName()).isEqualTo(newName);
+        CustomerResponse profile = userSteps.getProfile();
+
+        softly.assertThat(updateResponse.getCustomer().getName()).isEqualTo(updateRequest.getName());
+        ModelAssertions.assertThatModels(updateResponse.getCustomer(), profile).match();
     }
 
     public static Stream<String> invalidNames() {
@@ -91,16 +72,9 @@ public class ChangeUserNameTest extends BaseTest {
                 .name(invalidName)
                 .build();
 
-        new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsBadRequest())
+        new CrudRequester(userSpec, Endpoint.UPDATE_PROFILE, ResponseSpecs.requestReturnsBadRequest())
                 .put(updateRequest);
 
-        softly.assertThat(getProfile().getName()).isEqualTo(initialName);
-    }
-
-    private CustomerResponse getProfile() {
-        return new CustomerNameRequester(userSpec, ResponseSpecs.requestReturnsOK())
-                .get()
-                .extract()
-                .as(CustomerResponse.class);
+        softly.assertThat(userSteps.getProfile().getName()).isEqualTo(initialName);
     }
 }
