@@ -45,7 +45,7 @@ public class UserSteps {
     }
 
     public AccountResponse deposit(int accountId, BigDecimal amount) {
-        DepositeRequest request = DepositeRequest.builder()
+        DepositRequest request = DepositRequest.builder()
                 .id(accountId)
                 .balance(amount)
                 .build();

@@ -1,4 +1,4 @@
-package iteration1;
+package iteration1.api;
 
 import common.BaseTest;
 import constants.AuthConstants;

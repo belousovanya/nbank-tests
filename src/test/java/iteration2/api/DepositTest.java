@@ -1,4 +1,4 @@
-package iteration2;
+package iteration2.api;
 
 import common.AccountLimits;
 import common.BaseTest;
@@ -6,7 +6,7 @@ import generators.RandomData;
 import io.restassured.specification.RequestSpecification;
 import models.AccountResponse;
 import models.CreateUserRequest;
-import models.DepositeRequest;
+import models.DepositRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -23,7 +23,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
-public class DepositeTest extends BaseTest {
+public class DepositTest extends BaseTest {
     private static final int NONEXISTENT_ACCOUNT_ID_MIN = 1_000_000;
 
     private RequestSpecification userSpec;
@@ -41,35 +41,35 @@ public class DepositeTest extends BaseTest {
     @ParameterizedTest
     @ValueSource(doubles = {0.01, 4999.99, 5000})
     public void userCanDepositValidAmount(double amount) {
-        DepositeRequest depositeRequest = DepositeRequest.builder()
+        DepositRequest depositRequest = DepositRequest.builder()
                 .id(accountId)
                 .balance(BigDecimal.valueOf(amount))
                 .build();
 
-        AccountResponse depositeResponse = new ValidatedRequests(userSpec)
+        AccountResponse depositResponse = new ValidatedRequests(userSpec)
                 .<AccountResponse>request(Endpoint.DEPOSIT)
-                .post(depositeRequest);
+                .post(depositRequest);
 
-        softly.assertThat(depositeResponse.getBalance())
-                .isEqualByComparingTo(depositeRequest.getBalance());
+        softly.assertThat(depositResponse.getBalance())
+                .isEqualByComparingTo(depositRequest.getBalance());
 
         List<AccountResponse> accounts = userSteps.getAccounts();
 
         softly.assertThat(accounts.get(0).getBalance())
-                .isEqualByComparingTo(depositeRequest.getBalance());
+                .isEqualByComparingTo(depositRequest.getBalance());
     }
 
 
     @ParameterizedTest
     @ValueSource(doubles = {0, -0.01, 5000.01})
     public void userCanNotDepositInvalidAmount(double amount) {
-        DepositeRequest depositeRequest = DepositeRequest.builder()
+        DepositRequest depositRequest = DepositRequest.builder()
                 .id(accountId)
                 .balance(BigDecimal.valueOf(amount))
                 .build();
 
         new CrudRequester(userSpec, Endpoint.DEPOSIT, ResponseSpecs.requestReturnsBadRequest())
-                .post(depositeRequest);
+                .post(depositRequest);
 
         List<AccountResponse> accounts = userSteps.getAccounts();
 
@@ -84,13 +84,13 @@ public class DepositeTest extends BaseTest {
         UserSteps anotherUserSteps = new UserSteps(anotherUserSpec);
         int anotherAccountId = anotherUserSteps.createAccount().getId();
 
-        DepositeRequest depositeRequest = DepositeRequest.builder()
+        DepositRequest depositRequest = DepositRequest.builder()
                 .id(anotherAccountId)
                 .balance(RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT))
                 .build();
 
         new CrudRequester(userSpec, Endpoint.DEPOSIT, ResponseSpecs.requestReturnsForbidden())
-                .post(depositeRequest);
+                .post(depositRequest);
 
         List<AccountResponse> accounts = anotherUserSteps.getAccounts();
 
@@ -102,13 +102,13 @@ public class DepositeTest extends BaseTest {
     public void userCannotDepositToNonexistentAccount() {
         int nonexistentAccountId = ThreadLocalRandom.current().nextInt(NONEXISTENT_ACCOUNT_ID_MIN, Integer.MAX_VALUE);
 
-        DepositeRequest depositeRequest = DepositeRequest.builder()
+        DepositRequest depositRequest = DepositRequest.builder()
                 .id(nonexistentAccountId)
                 .balance(RandomData.getAmount(AccountLimits.MIN_AMOUNT, AccountLimits.MAX_DEPOSIT))
                 .build();
 
         new CrudRequester(userSpec, Endpoint.DEPOSIT, ResponseSpecs.requestReturnsForbidden())
-                .post(depositeRequest);
+                .post(depositRequest);
 
         List<AccountResponse> accounts = userSteps.getAccounts();
 

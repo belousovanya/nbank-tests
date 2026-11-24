@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class DepositeRequest extends BaseModel {
+public class DepositRequest extends BaseModel {
     private int id;
     private BigDecimal balance;
 }

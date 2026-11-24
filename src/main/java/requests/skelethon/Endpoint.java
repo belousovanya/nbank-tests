@@ -45,7 +45,7 @@ public enum Endpoint {
 
     DEPOSIT(
             "/accounts/deposit",
-            DepositeRequest.class,
+            DepositRequest.class,
             AccountResponse.class,
             HttpStatus.SC_OK
     ),
